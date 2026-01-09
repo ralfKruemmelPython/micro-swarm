@@ -13,6 +13,7 @@
 #include "sim/io.h"
 #include "sim/mycel.h"
 #include "sim/params.h"
+#include "sim/report.h"
 #include "sim/rng.h"
 
 namespace {
@@ -27,6 +28,8 @@ struct CliOptions {
     int dump_every = 0;
     std::string dump_dir = "dumps";
     std::string dump_prefix = "swarm";
+    std::string report_html_path;
+    int report_downsample = 32;
 };
 
 void print_help() {
@@ -48,6 +51,8 @@ void print_help() {
               << "  --dump-every N   Dump-Intervall (0=aus)\n"
               << "  --dump-dir PATH  Dump-Verzeichnis\n"
               << "  --dump-prefix N  Dump-Dateiprefix\n"
+              << "  --report-html PATH  Report-HTML-Pfad\n"
+              << "  --report-downsample N  Report-Downsample (0=aus)\n"
               << "  --help           Hilfe anzeigen\n";
 }
 
@@ -162,6 +167,13 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
             opts.dump_dir = value;
         } else if (arg == "--dump-prefix") {
             opts.dump_prefix = value;
+        } else if (arg == "--report-html") {
+            opts.report_html_path = value;
+        } else if (arg == "--report-downsample") {
+            if (!parse_int(value, opts.report_downsample)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else {
             std::cerr << "Unbekanntes Argument: " << arg << "\n";
             return false;
@@ -326,6 +338,26 @@ int main(int argc, char **argv) {
                       << " mycel_avg=" << mycel_avg
                       << "\n";
         }
+    }
+
+    if (opts.dump_every > 0) {
+        ReportOptions report_opts;
+        report_opts.dump_dir = opts.dump_dir;
+        report_opts.dump_prefix = opts.dump_prefix;
+        report_opts.report_html_path = opts.report_html_path;
+        report_opts.downsample = opts.report_downsample;
+        std::string report_error;
+        if (!generate_dump_report_html(report_opts, report_error)) {
+            std::cerr << "Report-Fehler: " << report_error << "\n";
+            return 1;
+        }
+        std::filesystem::path report_path;
+        if (opts.report_html_path.empty()) {
+            report_path = std::filesystem::path(opts.dump_dir) / (opts.dump_prefix + "_report.html");
+        } else {
+            report_path = opts.report_html_path;
+        }
+        std::cout << "report=" << report_path.string() << "\n";
     }
 
     std::cout << "done\n";

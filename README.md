@@ -1,144 +1,230 @@
-# Micro-Swarm: Biologisch inspiriertes Agenten-Netzwerk
+# Micro-Swarm  
+**Biologisch inspiriertes, agentenbasiertes Schwarm- und Gedächtnissystem (C++17)**
 
-Dieses Projekt implementiert ein experimentelles, agentenbasiertes System, das lokale Regeln aus Mycel-Wachstum, Pheromonkommunikation und evolutionären Prozessen kombiniert. Es nutzt **keine** klassischen neuronalen Netze, keine Backpropagation und keinen Gradientendescent. Der Fokus liegt auf der Frage, ob aus lokalen Interaktionen globale Struktur, Gedächtnisbildung und Anpassungsfähigkeit entstehen.
+Micro-Swarm ist ein experimentelles Artificial-Life-System, das untersucht, ob aus **lokalen Regeln** und **mehrschichtigen Gedächtnisformen** globale Struktur, Anpassung und stabile Pfade entstehen können – **ohne klassische neuronale Netze**, ohne Backpropagation und ohne Reinforcement-Learning-Frameworks.
 
-## Architektur-Ueberblick
+Der Fokus liegt auf:
+- Emergenz statt Optimierung
+- Kausal nachvollziehbaren Mechanismen
+- Trennung von Kurzzeit-, Mittelzeit- und Langzeitgedächtnis
 
-Das System ist in klar definierte Subsysteme zerlegt:
+---
 
-1. **Agenten**: Mobile Einheiten mit kurzem Zustand (Energie, Position, Richtung) und einem **Genome** (Parameter).
-2. **Umwelt**: Ressourcenfeld mit langsamer Regeneration.
-3. **Pheromone**: Diffusives Feld mit Verdampfung, gesteuert durch Agenten-Erfolg.
-4. **Molekuele (kurzlebige Zustaende)**: Schnell verdampfendes Feld fuer kurzfristige Kopplung.
-5. **Mycel-Netzwerk**: Dichtefeld, das stabile Pfade verstaerkt und Ressourcen-/Pheromonfluesse stabilisiert.
-6. **DNA-Gedaechtnis**: Langzeitgedaechtnis als Pool erfolgreicher Genome.
+## Zentrale Konzepte
 
-## Datenstrukturen
+### 1. Agenten
+Mobile Einheiten mit lokalem Zustand:
+- Position, Richtung, Energie
+- Genome (Parametervektor)
 
-### Agent
-```text
-struct Agent {
-  Position (x,y), heading, energy
-  Genome {sense_gain, pheromone_gain, exploration_bias}
-}
-```
-**Interpretation**:
-- `sense_gain`: Sensitivitaet fuer lokale Felder (Reizradius).
-- `pheromone_gain`: Gewichtung von Pheromonspuren.
-- `exploration_bias`: Zufallseinfluss beim Richtungswechsel.
+Agenten handeln ausschließlich lokal und besitzen **keine globale Sicht**.
 
-### Felder (Pheromone, Molekuele, Ressourcen, Mycel)
-```text
-GridField {
-  width, height, data[width * height]
-}
-```
-Jedes Feld ist ein Raster. Diffusion und Verdampfung werden lokal auf 4-Nachbarn angewendet.
+### 2. Felder (Environment)
+Alle Felder sind reguläre 2D-Raster (`GridField`):
 
-### DNA-Gedaechtnis
-```text
-DNAMemory {
-  entries: [ {Genome, fitness, age} ]
-}
-```
-Der Pool speichert erfolgreiche Genome als Langzeitgedaechtnis. Einfache Mutationen erzeugen Varianten.
+- **Ressourcenfeld**  
+  Langsam regenerierend, begrenzt (`resource_max`).
 
-## Lokale Regeln und Zustandsuebergaenge
+- **Pheromonfeld**  
+  Diffusiv, verdampfend. Dient der stigmergischen Kommunikation.
 
-### 1) Agentenbewegung (lokale Sensorik)
-- Ein Agent prueft drei lokale Sensorpunkte (links, vorne, rechts).
-- Gewichtung basiert auf Pheromon, Ressourcen und Molekuelen.
-- Der Agent waehlt eine Richtung stochastisch proportional zu den Messwerten.
-- Ein Zufallsterm (Exploration) sorgt fuer Diversitaet.
+- **Molekülfeld (Kurzzeitgedächtnis)**  
+  Stark verdampfend, lokal, schnelle Reaktion auf aktuelle Ereignisse.
 
-### 2) Ressourcenaufnahme und Pheromon-Emission
-- Erntet eine kleine Menge Ressourcen aus der aktuellen Zelle.
-- Erhoeht Energie proportional zur Ernte.
-- Deponiert Pheromon proportional zum Erfolg.
-- Schreibt kurzlebige Molekuele als schnelle, lokale Markierung.
+### 3. Mycel-Netzwerk (Strukturelles Gedächtnis)
+Ein langsames Dichtefeld, das **dauerhafte Aktivität** speichert und stabilisiert.
 
-### 3) Pheromone/Molekuele
-- Diffusion ueber Nachbarzellen.
-- Exponentielle Verdampfung verhindert Saturierung.
-- Erlaubt kurzzeitige Orientierung und Pfadbildung.
+**Aktuelle Dynamik (wichtig):**
+- Normalisierter Aktivitäts-Drive aus Pheromon + Ressourcen
+- Aktivitätsschwelle (unterhalb kein Wachstum)
+- **Logistisches Wachstum** (kein globales Aufpumpen)
+- **Diffusionsartiger Transport (Laplacian)** statt positiver Rückkopplung
+- Expliziter Decay
 
-### 4) Mycel-Netzwerk
-- Dichteverstaerkung bei hohem Pheromon- und Ressourcenwert.
-- Transportterm koppelt Nachbarn und stabilisiert Pfade.
-- Langsame Decay-Rate bewirkt strukturelle Persistenz.
+→ verhindert globale Sättigung (`mycel_avg != 1.0` Dauerzustand)
 
-### 5) DNA-Gedaechtnis (Langzeit)
-- Erfolgreiche Agenten legen ihr Genome im Pool ab.
-- Fitness basiert auf Energieanstieg.
-- Neue Agenten werden aus dem Pool gesampelt und leicht mutiert.
-- Fitness nimmt langsam ab (Alterung).
+### 4. DNA-Gedächtnis (Langzeit)
+- Pool erfolgreicher Genome
+- Fitness-gewichtetes Sampling
+- Mutationen bei Reproduktion
+- Alterung (Fitness-Decay)
 
-### 6) Agentenzyklus
-- Energiekosten pro Schritt.
-- Bei Energiemangel: Reinitialisierung mit einem Genome aus dem Pool.
-- Bei Energiespitzen: Eintrag in die DNA.
+DNA speichert **Strategien**, nicht Zustände.
 
-## Emergenz: Plausibilitaet und Kontrolle
+---
 
-Die Kombination aus:
-- kurzfristigen Signalspuren (Pheromon/Molekuele),
-- mittel-langfristiger Struktur (Mycel-Dichte),
-- und Langzeitgedaechtnis (DNA-Pool)
+## Agentenlogik (lokal, pro Schritt)
 
-erzeugt eine klare Trennschaerfe zwischen kurz- und langfristigen Effekten. Die erwarteten emergenten Effekte sind: stabilisierte Pfade, lokale Spezialisierung und selektive Erinnerung erfolgreicher Strategien.
+1. **Sensorik**
+   - Drei Richtungen (links / vorne / rechts)
+   - Gewichtung aus:
+     - Pheromon
+     - Ressourcen
+     - Molekülen
+     - Exploration-Bias
 
-## OpenCL-Integration (Praxis-Hinweis)
+2. **Bewegung**
+   - Stochastische Wahl proportional zu lokalen Gewichten
+   - Kein globales Ziel
 
-In `src/compute/opencl_loader.cpp` wird zur Laufzeit nach einer vorhandenen OpenCL-Runtime gesucht. Das Projekt nutzt aktuell den CPU-Fallback. Eine direkte Einbettung eines herstellerspezifischen OpenCL-Treibers ist in der Praxis und Lizenzlage nicht sinnvoll moeglich. Der Loader ist so gestaltet, dass eine spaetere GPU-Implementierung minimalen Umbau erfordert.
+3. **Interaktion**
+   - Ressourcenaufnahme
+   - Energiegewinn
+   - Pheromon- und Molekül-Emission
 
-## Build
+4. **Selektion**
+   - Hohe Energie → Eintrag ins DNA-Gedächtnis
+   - Niedrige Energie → Reinitialisierung aus DNA-Pool
 
-```bash
-cmake -S . -B build
-cmake --build build
-```
+---
 
-## Ausfuehrung
+## Build & Toolchain (Windows / MSVC)
 
-```bash
-./build/micro_swarm
-```
+Das Projekt wird **nativ mit Visual Studio 2022** kompiliert und nutzt **CMake ≥ 3.20**.
 
-## CLI-Parameter
+### Build-Workflow (bewährt)
 
-```text
---width N        Rasterbreite
---height N       Rasterhoehe
---agents N       Anzahl Agenten
---steps N        Simulationsschritte
---seed N         RNG-Seed
---resources CSV  Startwerte Ressourcenfeld
---pheromone CSV  Startwerte Pheromonfeld
---molecules CSV  Startwerte Molekuelfeld
+```powershell
+# 1. Hängenden Prozess hart beenden
+Get-Process "micro_swarm" -ErrorAction SilentlyContinue | Stop-Process -Force; `
+# 2. Kurz warten (Windows gibt Handles frei)
+Start-Sleep -Seconds 2; `
+# 3. Rebuild
+$CMake="C:\Program Files\CMake\bin\cmake.exe"; `
+if(Test-Path build){
+    Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+}; `
+& $CMake -S . -B build -G "Visual Studio 17 2022" -A x64; `
+& $CMake --build build --config Release -j 8
+````
+
+---
+
+## Ausführung
+
+```powershell
+.\build\Release\micro_swarm.exe
 ```
 
-## Datensatzformat (CSV)
+---
 
-Ein Datensatz ist eine CSV-Datei mit Zeilen gleicher Laenge. Kommentare mit `#` am Zeilenanfang werden ignoriert.
+## CLI-Parameter (vollständig)
 
-Beispiel `resources.csv`:
-```text
-0.0,0.1,0.2,0.0
-0.0,0.4,0.8,0.1
-0.0,0.0,0.2,0.0
+### Basis
+
+```
+--width N
+--height N
+--agents N
+--steps N
+--seed N
 ```
 
-Wenn ein CSV geladen wird, setzt es die Rastergroesse. Optional gesetzte `--width`/`--height` muessen passen, sonst bricht das Programm ab.
+### Startfelder (CSV)
 
-## Verzeichnisstruktur
+```
+--resources  resources.csv
+--pheromone  pheromone.csv
+--molecules  molecules.csv
+```
 
-- `src/main.cpp`: Simulationsloop, Logging, Initialisierung.
-- `src/sim/*.h|*.cpp`: Subsysteme und lokale Regeln.
-- `src/compute/opencl_loader.*`: Runtime-Probe fuer OpenCL.
+CSV-Format:
 
-## Naechste Erweiterungen
+* Zeilen = Rasterzeilen
+* Kommagetrennte Floats
+* `#` am Zeilenanfang = Kommentar
 
-- GPU-Kernel fuer Diffusion und Agenten-Updates.
-- Mehrkanalige Pheromone (z. B. Nahrung vs. Gefahr).
-- Unterschiedliche Agentenrollen und kooperative Strategien.
-- Explizite Mycel-Transportfluesse ueber gerichtete Kanten.
+---
+
+### Mycel-Tuning (neu)
+
+```
+--mycel-growth F
+--mycel-decay F
+--mycel-transport F
+--mycel-threshold F
+--mycel-drive-p F
+--mycel-drive-r F
+```
+
+Diese Parameter erlauben **Live-Tuning**, ohne Recompile.
+
+---
+
+### Feld-Dumps (Diagnose / Analyse)
+
+```
+--dump-every N        # 0 = aus
+--dump-dir PATH       # Default: dumps
+--dump-prefix NAME    # Default: swarm
+```
+
+Beispiel:
+
+```powershell
+.\micro_swarm.exe --steps 500 --dump-every 50 --dump-dir dumps --dump-prefix test
+```
+
+Erzeugt:
+
+```
+dumps/
+ ├─ test_step000000_resources.csv
+ ├─ test_step000000_pheromone.csv
+ ├─ test_step000000_molecules.csv
+ ├─ test_step000000_mycel.csv
+ ├─ test_step000050_...
+```
+
+Ideal für:
+
+* Heatmaps
+* Zeitraffer
+* Emergenz-Analyse
+
+---
+
+## Erwartetes Systemverhalten
+
+* **Mycel** bildet stabile Pfade, aber keine globale Sättigung
+* **Pheromone** reagieren schnell, sind flüchtig
+* **DNA-Pool** wächst selektiv, nicht explosionsartig
+* **Agenten** zeigen:
+
+  * Pfadbildung
+  * Lokale Spezialisierung
+  * Anpassung bei Umweltänderung
+
+---
+
+## Was Micro-Swarm bewusst nicht ist
+
+* Kein neuronales Netz
+* Kein Deep Learning
+* Kein Reinforcement-Learning-Framework
+* Keine Blackbox-Optimierung
+
+Alle Effekte sind **mechanistisch erklärbar**.
+
+---
+
+## Nächste sinnvolle Experimente
+
+* Ablationstests (Pheromon / Mycel / DNA aus)
+* Mehrkanal-Pheromone (z. B. Nahrung vs. Gefahr)
+* Unterschiedliche Agentenrollen
+* GPU-Beschleunigung der Felddiffusion (OpenCL-Kernel)
+
+---
+
+## Status
+
+**Forschungs- und Experimentalsystem**
+Stabil, deterministisch bei festem Seed, vollständig instrumentierbar.
+
+---
+
+**Autor:**
+Ralf Krümmel
+Artificial Life / Emergent Systems / Low-Level Simulation
+
