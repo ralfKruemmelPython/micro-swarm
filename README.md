@@ -251,6 +251,43 @@ Wenn Agenten aktiv sind, wird Copyback erzwungen (Sensorsignale benoetigen aktue
 --species-profile S exploration food_attraction danger_aversion dep_food dep_danger
 ```
 
+#### Rollen (Species 0..3)
+
+Die vier Spezies sind feste Rollen mit unterschiedlichen lokalen Praeferenzen. Default-Zuordnung:
+
+| Species | Rollenname   | Prinzip |
+|--------:|-------------|---------|
+| 0       | Explorator  | Neugier / Informationsgewinn |
+| 1       | Integrator  | Verdichtung / Strukturaufbau |
+| 2       | Regulator   | Stabilitaet / Kontrolle |
+| 3       | Innovator   | Variation / Strategiebruch |
+
+**Explorator**
+- Hoher Exploration-Bias
+- Geringe Pheromon-Bindung
+- Starke Reaktion auf neue Gradienten (Ressourcen + Molekuele)
+- Niedriger Deposit-Scale
+
+**Integrator**
+- Hohe Gewichtung bestehender Pheromon- und Mycel-Strukturen
+- Niedrige Exploration
+- Hoher Deposit-Scale fuer Food-Pheromone
+- Stabilisiert Pfade (Gedaechtnisbildung)
+
+**Regulator**
+- Starke Sensitivitaet auf Danger-Pheromone
+- Erhoehte Aversion bei lokalen Ueberdichten
+- Negatives Feedback (Counter-Deposits / Abschwaechung)
+
+**Innovator**
+- Erhoehte Mutationsraten im Genome
+- Schwaechere DNA-Bindung (haeufigere Neuinitialisierung)
+- Bevorzugt Randbereiche hoher Entropie
+
+Hinweis: `--species-profile` ueberschreibt pro Spezies nur die Basiswerte
+(exploration, food_attraction, danger_aversion, dep_food, dep_danger).
+Die rollenspezifischen Zusatzgewichte bleiben aktiv.
+
 ---
 
 ### Report
