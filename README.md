@@ -104,6 +104,32 @@ cmake --build build
 ./build/micro_swarm
 ```
 
+## CLI-Parameter
+
+```text
+--width N        Rasterbreite
+--height N       Rasterhoehe
+--agents N       Anzahl Agenten
+--steps N        Simulationsschritte
+--seed N         RNG-Seed
+--resources CSV  Startwerte Ressourcenfeld
+--pheromone CSV  Startwerte Pheromonfeld
+--molecules CSV  Startwerte Molekuelfeld
+```
+
+## Datensatzformat (CSV)
+
+Ein Datensatz ist eine CSV-Datei mit Zeilen gleicher Laenge. Kommentare mit `#` am Zeilenanfang werden ignoriert.
+
+Beispiel `resources.csv`:
+```text
+0.0,0.1,0.2,0.0
+0.0,0.4,0.8,0.1
+0.0,0.0,0.2,0.0
+```
+
+Wenn ein CSV geladen wird, setzt es die Rastergroesse. Optional gesetzte `--width`/`--height` muessen passen, sonst bricht das Programm ab.
+
 ## Verzeichnisstruktur
 
 - `src/main.cpp`: Simulationsloop, Logging, Initialisierung.

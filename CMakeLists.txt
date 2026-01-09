@@ -18,6 +18,8 @@ add_executable(micro_swarm
     src/sim/mycel.h
     src/sim/params.h
     src/sim/rng.h
+    src/sim/io.cpp
+    src/sim/io.h
     src/compute/opencl_loader.cpp
     src/compute/opencl_loader.h
 )

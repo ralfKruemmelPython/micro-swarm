@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\agent.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\dna_memory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\environment.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\fields.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\mycel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\io.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\compute\opencl_loader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\agent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\dna_memory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\environment.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\fields.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\mycel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\params.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\rng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\io.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\compute\opencl_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{6821E3B3-DC8B-3DDA-84E9-76CA388C490D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{91C1DAA6-512F-308C-BCC2-C4AF8E9885F9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
