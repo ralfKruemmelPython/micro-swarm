@@ -163,6 +163,7 @@ void print_help() {
               << "  --resources CSV  Startwerte Ressourcenfeld\n"
               << "  --pheromone CSV  Startwerte Pheromonfeld\n"
               << "  --molecules CSV  Startwerte Molekuelfeld\n"
+              << "  --resource-regen F  Ressourcen-Regeneration\n"
               << "  --mycel-growth F     Mycel-Wachstumsrate\n"
               << "  --mycel-decay F      Mycel-Decay\n"
               << "  --mycel-transport F  Mycel-Transport\n"
@@ -411,6 +412,11 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
             opts.pheromone_path = value;
         } else if (arg == "--molecules") {
             opts.molecules_path = value;
+        } else if (arg == "--resource-regen") {
+            if (!parse_float(value, opts.params.resource_regen)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--mycel-growth") {
             if (!parse_float(value, opts.params.mycel_growth)) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
