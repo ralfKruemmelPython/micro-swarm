@@ -181,7 +181,7 @@ dumps/
 ## 1) **Baseline / Paper-Run**
 
 ```powershell
-.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix baseline --report-html dumps\baseline_report.html --report-downsample 32 --report-hist-bins 64 --paper-mode --report-global-norm
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix baseline --report-html dumps\baseline_report.html --report-downsample 32 --report-hist-bins 64 --paper-mode --report-global-norm Baseline-Paper_Run
 ```
 
 **Was das ist:**
@@ -209,7 +209,7 @@ Der **Referenzlauf** des Systems ohne externe Störungen und ohne Evolution-Tuni
 ## 2) **Stress-Test / Adaptionslauf**
 
 ```powershell
-.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix stress --report-html dumps\stress_report.html --report-downsample 32 --report-hist-bins 64 --stress-enable --stress-at-step 120 --stress-block-rect 40 40 30 30 --stress-pheromone-noise 0.004 --stress-seed 1337
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix stress --report-html dumps\stress_report.html --report-downsample 32 --report-hist-bins 64 --stress-enable --stress-at-step 120 --stress-block-rect 40 40 30 30 --stress-pheromone-noise 0.004 --stress-seed 1337 Stress-Test_Adaptionslauf
 ```
 
 **Was das ist:**
@@ -238,8 +238,7 @@ Ein **Umwelt-Störungstest**, der die Robustheit und Adaptionsfähigkeit des Sch
 ## 3) **Evolution / Selektion scharf gestellt**
 
 ```powershell
-.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix evo --report-html dumps\evo_report.html --report-downsample 32 --report-hist-bins 64 --evo-enable --evo-elite-frac 0.20 --evo-min-energy-to-store 1.6 --evo-mutation-sigma 0.05 --evo-exploration-delta 0.05 --evo-fitness-window 50 --evo-age_decay 0.995
-```
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix evo --report-html dumps\evo_report.html --report-downsample 32 --report-hist-bins 64 --evo-enable --evo-elite-frac 0.20 --evo-min-energy-to-store 1.6 --evo-mutation-sigma 0.05 --evo-exploration-delta 0.05 --evo-fitness-window 50 --evo-age-decay 0.995 Evolution_Selektion_scharf_gestellt ```
 
 **Was das ist:**
 Ein **selektiver Evolutionslauf**, bei dem DNA nicht mehr „nebenbei“, sondern gezielt entsteht.
