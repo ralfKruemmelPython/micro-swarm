@@ -22,6 +22,9 @@
     <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\io.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\report.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\compute\opencl_loader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -49,6 +52,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\io.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\report.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\compute\opencl_loader.h">

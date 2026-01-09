@@ -416,6 +416,8 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\rng.h" />
     <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\io.cpp" />
     <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\io.h" />
+    <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\report.cpp" />
+    <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\sim\report.h" />
     <ClCompile Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\compute\opencl_loader.cpp" />
     <ClInclude Include="C:\Users\ralfk\Downloads\superpromt\micro-swarm\src\compute\opencl_loader.h" />
   </ItemGroup>
