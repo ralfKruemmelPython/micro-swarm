@@ -439,6 +439,10 @@ Stabil, deterministisch bei festem Seed, vollständig instrumentierbar.
 
 ---
 
+## Warum C++ / warum kein Python
+Micro-Swarm ist bewusst in C++ implementiert, um deterministische Laufzeiten, Speicherlokalität und vollständige Kontrolle über Diffusions- und Update-Ordnungen zu garantieren. Die Performance erlaubt Experimente im Bereich mehrerer Tausend Schritte in Sekunden und bildet die Grundlage für echte GPU-Skalierung über OpenCL.
+
+---
 **Autor:**
 Ralf Krümmel
 Artificial Life / Emergent Systems / Low-Level Simulation
