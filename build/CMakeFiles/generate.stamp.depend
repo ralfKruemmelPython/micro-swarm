@@ -19,6 +19,7 @@ C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeLanguageInformation.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeParseImplicitIncludeInfo.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeParseImplicitLinkInfo.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeParseLibraryArchitecture.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CMakePushCheckState.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeRCCompiler.cmake.in
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeRCInformation.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeSystem.cmake.in
@@ -27,6 +28,7 @@ C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInitialize.cma
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeTestCXXCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeTestCompilerCommon.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CMakeTestRCCompiler.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/CheckSymbolExists.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Compiler/ADSP-DetermineCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Compiler/ARMCC-DetermineCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Compiler/ARMClang-DetermineCompiler.cmake
@@ -72,6 +74,9 @@ C:/Program Files/CMake/share/cmake-4.1/Modules/Compiler/XL-CXX-DetermineCompiler
 C:/Program Files/CMake/share/cmake-4.1/Modules/Compiler/XLClang-CXX-DetermineCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Compiler/zOS-CXX-DetermineCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/CompilerId/VS-10.vcxproj.in
+C:/Program Files/CMake/share/cmake-4.1/Modules/FindOpenCL.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/FindPackageHandleStandardArgs.cmake
+C:/Program Files/CMake/share/cmake-4.1/Modules/FindPackageMessage.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCXXLinkerInformation.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCommonLinkerInformation.cmake
 C:/Program Files/CMake/share/cmake-4.1/Modules/Internal/CMakeDetermineLinkerId.cmake
@@ -91,4 +96,5 @@ C:/Users/ralfk/Downloads/superpromt/micro-swarm/CMakeLists.txt
 C:/Users/ralfk/Downloads/superpromt/micro-swarm/build/CMakeFiles/4.1.0-rc2/CMakeCXXCompiler.cmake
 C:/Users/ralfk/Downloads/superpromt/micro-swarm/build/CMakeFiles/4.1.0-rc2/CMakeRCCompiler.cmake
 C:/Users/ralfk/Downloads/superpromt/micro-swarm/build/CMakeFiles/4.1.0-rc2/CMakeSystem.cmake
+D:/M-ZOA-GPU/vcpkg/installed/x64-windows/share/opencl/vcpkg-cmake-wrapper.cmake
 D:/M-ZOA-GPU/vcpkg/scripts/buildsystems/vcpkg.cmake
