@@ -1,0 +1,15 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "MicroSwarm",
+  "Description": "Micro-Swarm runtime bindings (cdecl C-API).",
+  "Category": "Runtime",
+  "Modules": [
+    {
+      "Name": "MicroSwarmRuntime",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
