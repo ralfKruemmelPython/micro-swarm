@@ -25,8 +25,11 @@ Alle Felder sind reguläre 2D-Raster (`GridField`):
 - **Ressourcenfeld**  
   Langsam regenerierend, begrenzt (`resource_max`).
 
-- **Pheromonfeld**  
-  Diffusiv, verdampfend. Dient der stigmergischen Kommunikation.
+- **Pheromonfeld (Food)**  
+  Diffusiv, verdampfend. Attraktiver Kommunikationskanal.
+
+- **Pheromonfeld (Danger)**  
+  Diffusiv, verdampfend. Repulsiver Kommunikationskanal.
 
 - **Molekülfeld (Kurzzeitgedächtnis)**  
   Stark verdampfend, lokal, schnelle Reaktion auf aktuelle Ereignisse.
@@ -58,7 +61,8 @@ DNA speichert **Strategien**, nicht Zustände.
 1. **Sensorik**
    - Drei Richtungen (links / vorne / rechts)
    - Gewichtung aus:
-     - Pheromon
+     - Pheromon Food (attraktiv)
+     - Pheromon Danger (repulsiv)
      - Ressourcen
      - Molekülen
      - Exploration-Bias
@@ -113,8 +117,8 @@ if(Test-Path build){
 ### Basis
 
 ```
---width N
---height N
+--width N          (Alias: --wight)
+--height N         (Alias: --hight)
 --size N
 --agents N
 --steps N
@@ -127,6 +131,7 @@ if(Test-Path build){
 --resources  resources.csv
 --pheromone  pheromone.csv
 --molecules  molecules.csv
+--resource-regen F
 ```
 
 CSV-Format:
@@ -135,9 +140,11 @@ CSV-Format:
 * Kommagetrennte Floats
 * `#` am Zeilenanfang = Kommentar
 
+Hinweis: `--pheromone` initialisiert nur den **Food**-Kanal. Danger startet bei 0.
+
 ---
 
-### Mycel-Tuning (neu)
+### Mycel-Tuning / Pheromon-Danger (neu)
 
 ```
 --mycel-growth F
@@ -176,17 +183,21 @@ Erzeugt:
 ```
 dumps/
  ├─ test_step000000_resources.csv
- ├─ test_step000000_pheromone.csv
+ ├─ test_step000000_phero_food.csv
+ ├─ test_step000000_phero_danger.csv
  ├─ test_step000000_molecules.csv
  ├─ test_step000000_mycel.csv
  ├─ test_step000050_...
 ```
+
+Warum: CSV-Dumps erlauben externe Visualisierung, Debugging und Paper-Auswertung.
 
 ---
 
 ### GPU / OpenCL (Diffusion auf der GPU)
 
 OpenCL ist optional und faellt bei Problemen automatisch auf CPU zurueck.
+GPU-Beschleunigung gilt fuer **Pheromon Food**, **Pheromon Danger** und **Molekuel**.
 
 ```
 --ocl-enable
@@ -300,6 +311,19 @@ Die rollenspezifischen Zusatzgewichte bleiben aktiv.
 --report-hist-bins N
 --report-no-sparklines
 ```
+
+Wenn Dumps aktiv sind, wird automatisch ein **Offline-HTML-Report** erzeugt.
+Standardpfad: `<dump-dir>/<dump-prefix>_report.html` (falls nicht gesetzt).
+
+Der Report enthaelt:
+* Step-Weise Statistiken (min/max/mean/stddev/p95/entropy)
+* Heatmap-Previews (optional Downsample)
+* Summary-Sparklines ueber die Zeit
+* Scenario-Sektion (z. B. Stress-Parameter)
+* Systemmetriken (DNA-Pool-Groessen, Energie je Spezies)
+
+Im Paper-Modus entsteht zusaetzlich:
+* `<prefix>_metrics.csv` (metrische Zeitreihen fuer Auswertung/Plotting)
 
 ---
 
@@ -426,9 +450,8 @@ Alle Effekte sind **mechanistisch erklärbar**.
 ## Nächste sinnvolle Experimente
 
 * Ablationstests (Pheromon / Mycel / DNA aus)
-* Mehrkanal-Pheromone (z. B. Nahrung vs. Gefahr)
-* Unterschiedliche Agentenrollen
 * GPU-Mycel-Update als zusaetzlicher Kernel
+* Species-Profile Sweeps (systematische Parameterstudien)
 
 ---
 
@@ -436,6 +459,9 @@ Alle Effekte sind **mechanistisch erklärbar**.
 
 **Forschungs- und Experimentalsystem**
 Stabil, deterministisch bei festem Seed, vollständig instrumentierbar.
+
+Zusatz: Es existiert eine **C-API/DLL** (`micro_swarm.dll` / `libmicro_swarm.so`)
+fuer externe Forschung (Python/Rust/Unity/Unreal).
 
 ---
 
