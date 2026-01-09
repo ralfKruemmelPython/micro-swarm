@@ -360,17 +360,6 @@ Ein **selektiver Evolutionslauf**, bei dem DNA nicht mehr „nebenbei“, sonder
 | Stress    | Robustheit / Adaptation       | „Kann das System umlernen?“     |
 | Evolution | Selektion / Gedächtnisbildung | „Entstehen bessere Strategien?“ |
 
-Wenn du willst, formuliere ich dir daraus direkt einen **README-Abschnitt „Experiment Presets“** oder eine **wissenschaftliche Ergebnisinterpretation** auf Basis der Reports.
-
-
-
-
-Ideal für:
-
-* Heatmaps
-* Zeitraffer
-* Emergenz-Analyse
-
 ---
 
 ## Erwartetes Systemverhalten
