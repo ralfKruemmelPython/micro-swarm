@@ -425,9 +425,6 @@ Alle Effekte sind **mechanistisch erklärbar**.
 
 ## Nächste sinnvolle Experimente
 
-* Ablationstests (Pheromon / Mycel / DNA aus)
-* Mehrkanal-Pheromone (z. B. Nahrung vs. Gefahr)
-* Unterschiedliche Agentenrollen
 * GPU-Mycel-Update als zusaetzlicher Kernel
 
 ---
