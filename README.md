@@ -176,6 +176,107 @@ dumps/
  ├─ test_step000050_...
 ```
 
+---
+
+## 1) **Baseline / Paper-Run**
+
+```powershell
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix baseline --report-html dumps\baseline_report.html --report-downsample 32 --report-hist-bins 64 --paper-mode --report-global-norm
+```
+
+**Was das ist:**
+Der **Referenzlauf** des Systems ohne externe Störungen und ohne Evolution-Tuning.
+
+**Was er macht:**
+
+* Führt die Simulation deterministisch aus (Seed = 42)
+* Schreibt alle 50 Schritte Feld-Dumps (Ressourcen, Pheromone, Moleküle, Mycel)
+* Erzeugt einen **wissenschaftlichen HTML-Report**:
+
+  * globale Normalisierung (zeitlich vergleichbare Heatmaps)
+  * Entropie, p95, nonzero_ratio
+  * Sparklines über die Zeit
+  * zusätzlich `baseline_metrics.csv` (Paper-Modus)
+
+**Wofür gedacht:**
+
+* **Ground Truth**
+* Vergleichsbasis für Stress- und Evolutionsläufe
+* Analyse von Emergenz *ohne* Eingriffe
+
+---
+
+## 2) **Stress-Test / Adaptionslauf**
+
+```powershell
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix stress --report-html dumps\stress_report.html --report-downsample 32 --report-hist-bins 64 --stress-enable --stress-at-step 120 --stress-block-rect 40 40 30 30 --stress-pheromone-noise 0.004 --stress-seed 1337
+```
+
+**Was das ist:**
+Ein **Umwelt-Störungstest**, der die Robustheit und Adaptionsfähigkeit des Schwarms prüft.
+
+**Was er macht:**
+
+* Läuft zunächst identisch zur Baseline
+* Ab Schritt **120**:
+
+  * blockiert ein Ressourcen-Rechteck (40,40 – 30×30)
+  * injiziert kontinuierliches Pheromon-Rauschen
+* Alle Effekte werden im Report als *Scenario* dokumentiert
+
+**Wofür gedacht:**
+
+* Prüfen, ob:
+
+  * Mycel-Pfade umlernen
+  * Agenten neue Strategien finden
+  * das System stabil bleibt (keine Explosion / kein Kollaps)
+* **Resilienz-Analyse**
+
+---
+
+## 3) **Evolution / Selektion scharf gestellt**
+
+```powershell
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix evo --report-html dumps\evo_report.html --report-downsample 32 --report-hist-bins 64 --evo-enable --evo-elite-frac 0.20 --evo-min-energy-to-store 1.6 --evo-mutation-sigma 0.05 --evo-exploration-delta 0.05 --evo-fitness-window 50 --evo-age_decay 0.995
+```
+
+**Was das ist:**
+Ein **selektiver Evolutionslauf**, bei dem DNA nicht mehr „nebenbei“, sondern gezielt entsteht.
+
+**Was er macht:**
+
+* Aktiviert Elite-Selektion (Top 20 %)
+* Speichert Genome nur bei *echtem* Fitness-Gewinn
+* Fitness basiert auf **Energiezuwachs über Zeitfenster**, nicht auf Momentwerten
+* Mutation ist kontrolliert, keine Drift-Explosion
+* Report zeigt:
+
+  * DNA-Pool-Dynamik
+  * Energieverteilung
+  * Entropie-Änderungen
+
+**Wofür gedacht:**
+
+* Beobachtung echter **Strategie-Evolution**
+* Nachweis, dass DNA ein **Langzeitgedächtnis für Verhalten** ist
+* Trennung von kurzfristigem Erfolg vs. nachhaltiger Fitness
+
+---
+
+## Kurz gesagt
+
+| Run       | Zweck                         | Frage, die er beantwortet       |
+| --------- | ----------------------------- | ------------------------------- |
+| Baseline  | Referenz / Paper              | „Was passiert ohne Eingriffe?“  |
+| Stress    | Robustheit / Adaptation       | „Kann das System umlernen?“     |
+| Evolution | Selektion / Gedächtnisbildung | „Entstehen bessere Strategien?“ |
+
+Wenn du willst, formuliere ich dir daraus direkt einen **README-Abschnitt „Experiment Presets“** oder eine **wissenschaftliche Ergebnisinterpretation** auf Basis der Reports.
+
+
+
+
 Ideal für:
 
 * Heatmaps

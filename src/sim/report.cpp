@@ -19,6 +19,9 @@ struct FieldStats {
     float mean = 0.0f;
     float stddev = 0.0f;
     float nonzero_ratio = 0.0f;
+    float p95 = 0.0f;
+    float entropy = 0.0f;
+    float norm_entropy = 0.0f;
 };
 
 bool parse_dump_filename(const std::string &filename, const std::string &prefix, int &step, std::string &field) {
@@ -59,7 +62,7 @@ bool parse_dump_filename(const std::string &filename, const std::string &prefix,
     return true;
 }
 
-FieldStats compute_stats(const std::vector<float> &values) {
+FieldStats compute_stats(const std::vector<float> &values, int bins) {
     FieldStats stats;
     if (values.empty()) {
         return stats;
@@ -82,6 +85,33 @@ FieldStats compute_stats(const std::vector<float> &values) {
     }
     stats.stddev = static_cast<float>(std::sqrt(var_sum / static_cast<double>(values.size())));
     stats.nonzero_ratio = static_cast<float>(nonzero) / static_cast<float>(values.size());
+    std::vector<float> sorted(values.begin(), values.end());
+    size_t idx = static_cast<size_t>(std::floor(0.95 * (sorted.size() - 1)));
+    std::nth_element(sorted.begin(), sorted.begin() + idx, sorted.end());
+    stats.p95 = sorted[idx];
+
+    if (bins <= 1 || stats.max <= stats.min) {
+        stats.entropy = 0.0f;
+        stats.norm_entropy = 0.0f;
+        return stats;
+    }
+    std::vector<int> hist(static_cast<size_t>(bins), 0);
+    double range = static_cast<double>(stats.max - stats.min);
+    for (float v : values) {
+        int bin = static_cast<int>(std::floor((v - stats.min) / range * bins));
+        if (bin < 0) bin = 0;
+        if (bin >= bins) bin = bins - 1;
+        hist[static_cast<size_t>(bin)]++;
+    }
+    double ent = 0.0;
+    double denom = static_cast<double>(values.size());
+    for (int c : hist) {
+        if (c <= 0) continue;
+        double p = static_cast<double>(c) / denom;
+        ent -= p * std::log(p);
+    }
+    stats.entropy = static_cast<float>(ent);
+    stats.norm_entropy = static_cast<float>(ent / std::log(static_cast<double>(bins)));
     return stats;
 }
 
@@ -143,6 +173,34 @@ std::string render_svg_heatmap(const std::vector<float> &values, int size, float
     return ss.str();
 }
 
+std::string sparkline(const std::vector<float> &values, float &out_min, float &out_max) {
+    static const char *blocks[] = {
+        "&#9601;", "&#9602;", "&#9603;", "&#9604;",
+        "&#9605;", "&#9606;", "&#9607;", "&#9608;"
+    };
+    if (values.empty()) {
+        out_min = 0.0f;
+        out_max = 0.0f;
+        return "";
+    }
+    out_min = values.front();
+    out_max = values.front();
+    for (float v : values) {
+        if (v < out_min) out_min = v;
+        if (v > out_max) out_max = v;
+    }
+    float range = out_max - out_min;
+    std::string out;
+    for (float v : values) {
+        float t = (range > 0.0f) ? (v - out_min) / range : 0.0f;
+        int idx = static_cast<int>(std::round(t * 7.0f));
+        if (idx < 0) idx = 0;
+        if (idx > 7) idx = 7;
+        out += blocks[idx];
+    }
+    return out;
+}
+
 std::string make_relative_link(const std::filesystem::path &from_dir, const std::filesystem::path &to_file) {
     std::error_code ec;
     std::filesystem::path rel = std::filesystem::relative(to_file, from_dir, ec);
@@ -160,6 +218,10 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
     }
     if (opts.dump_prefix.empty()) {
         error = "Dump-Prefix ist leer";
+        return false;
+    }
+    if (opts.hist_bins <= 0) {
+        error = "Histogramm-Bins muessen > 0 sein";
         return false;
     }
 
@@ -189,6 +251,10 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
     }
 
     const std::vector<std::string> fields = {"resources", "pheromone", "molecules", "mycel"};
+    std::map<int, SystemMetrics> system_by_step;
+    for (const auto &m : opts.system_metrics) {
+        system_by_step[m.step] = m;
+    }
 
     struct StepData {
         int step = 0;
@@ -245,10 +311,67 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
 
         for (const auto &field : fields) {
             const auto &grid = step.grids[field];
-            step.stats[field] = compute_stats(grid.values);
+            step.stats[field] = compute_stats(grid.values, opts.hist_bins);
             if (opts.downsample > 0) {
                 std::vector<float> down = downsample_grid(grid.width, grid.height, grid.values, opts.downsample);
                 step.previews[field] = render_svg_heatmap(down, opts.downsample, step.stats[field].min, step.stats[field].max);
+            }
+        }
+    }
+
+    std::map<std::string, std::pair<float, float>> global_minmax;
+    for (const auto &field : fields) {
+        bool init = false;
+        float gmin = 0.0f;
+        float gmax = 0.0f;
+        for (const auto &step : steps) {
+            const auto &stats = step.stats.at(field);
+            if (!init) {
+                gmin = stats.min;
+                gmax = stats.max;
+                init = true;
+            } else {
+                gmin = std::min(gmin, stats.min);
+                gmax = std::max(gmax, stats.max);
+            }
+        }
+        global_minmax[field] = {gmin, gmax};
+    }
+
+    if (opts.global_normalization && opts.downsample > 0) {
+        for (auto &step : steps) {
+            for (const auto &field : fields) {
+                const auto &grid = step.grids[field];
+                std::vector<float> down = downsample_grid(grid.width, grid.height, grid.values, opts.downsample);
+                auto minmax = global_minmax[field];
+                step.previews[field] = render_svg_heatmap(down, opts.downsample, minmax.first, minmax.second);
+            }
+        }
+    }
+
+    if (opts.paper_mode) {
+        std::filesystem::path metrics_path = dump_dir / (opts.dump_prefix + "_metrics.csv");
+        std::ofstream metrics(metrics_path);
+        if (!metrics.is_open()) {
+            error = "Metrics CSV konnte nicht geschrieben werden: " + metrics_path.string();
+            return false;
+        }
+        metrics << "step,field,min,max,mean,stddev,nonzero_ratio,p95,entropy,norm_entropy,dna_pool_size,avg_agent_energy\n";
+        for (const auto &step : steps) {
+            for (const auto &field : fields) {
+                const auto &stats = step.stats.at(field);
+                metrics << step.step << "," << field << ","
+                        << std::fixed << std::setprecision(6)
+                        << stats.min << "," << stats.max << "," << stats.mean << "," << stats.stddev << ","
+                        << stats.nonzero_ratio << "," << stats.p95 << "," << stats.entropy << "," << stats.norm_entropy
+                        << ",,\n";
+            }
+            auto it = system_by_step.find(step.step);
+            if (it != system_by_step.end()) {
+                metrics << step.step << ",__system__,"
+                        << "0,0,0,0,0,0,0,0,"
+                        << it->second.dna_pool_size << "," << std::fixed << std::setprecision(6) << it->second.avg_agent_energy
+                        << "\n";
             }
         }
     }
@@ -283,7 +406,50 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
     out << "<div>dump_dir: " << opts.dump_dir << "</div>";
     out << "<div>prefix: " << opts.dump_prefix << "</div>";
     out << "<div>steps: " << steps.size() << "</div>";
+    out << "<div>normalization: " << (opts.global_normalization ? "global" : "local") << "</div>";
     out << "</div>";
+
+    if (!opts.scenario_summary.empty()) {
+        out << "<h2>Scenario</h2>";
+        out << "<div>" << opts.scenario_summary << "</div>";
+    }
+
+    if (opts.include_sparklines) {
+        out << "<h2>Summary over time</h2>";
+        out << "<table>";
+        out << "<tr><th>Field</th><th>mean</th><th>nonzero_ratio</th><th>norm_entropy</th></tr>";
+        for (const auto &field : fields) {
+            std::vector<float> mean_series;
+            std::vector<float> nonzero_series;
+            std::vector<float> entropy_series;
+            mean_series.reserve(steps.size());
+            nonzero_series.reserve(steps.size());
+            entropy_series.reserve(steps.size());
+            for (const auto &step : steps) {
+                const auto &stats = step.stats.at(field);
+                mean_series.push_back(stats.mean);
+                nonzero_series.push_back(stats.nonzero_ratio);
+                entropy_series.push_back(stats.norm_entropy);
+            }
+            float minv = 0.0f;
+            float maxv = 0.0f;
+            std::string mean_spark = sparkline(mean_series, minv, maxv);
+            float nz_min = 0.0f;
+            float nz_max = 0.0f;
+            std::string nz_spark = sparkline(nonzero_series, nz_min, nz_max);
+            float ent_min = 0.0f;
+            float ent_max = 0.0f;
+            std::string ent_spark = sparkline(entropy_series, ent_min, ent_max);
+
+            out << "<tr>";
+            out << "<td>" << field << "</td>";
+            out << "<td>" << mean_spark << " <span>(" << std::fixed << std::setprecision(4) << minv << " .. " << maxv << ")</span></td>";
+            out << "<td>" << nz_spark << " <span>(" << std::fixed << std::setprecision(4) << nz_min << " .. " << nz_max << ")</span></td>";
+            out << "<td>" << ent_spark << " <span>(" << std::fixed << std::setprecision(4) << ent_min << " .. " << ent_max << ")</span></td>";
+            out << "</tr>";
+        }
+        out << "</table>";
+    }
 
     for (const auto &step : steps) {
         out << "<h2>Step " << step.step << "</h2>";
@@ -300,7 +466,10 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
             out << "max=" << std::fixed << std::setprecision(4) << stats.max << "<br>";
             out << "mean=" << std::fixed << std::setprecision(4) << stats.mean << "<br>";
             out << "stddev=" << std::fixed << std::setprecision(4) << stats.stddev << "<br>";
-            out << "nonzero_ratio=" << std::fixed << std::setprecision(4) << stats.nonzero_ratio;
+            out << "nonzero_ratio=" << std::fixed << std::setprecision(4) << stats.nonzero_ratio << "<br>";
+            out << "p95=" << std::fixed << std::setprecision(4) << stats.p95 << "<br>";
+            out << "entropy=" << std::fixed << std::setprecision(4) << stats.entropy << "<br>";
+            out << "norm_entropy=" << std::fixed << std::setprecision(4) << stats.norm_entropy;
             out << "</td>";
             out << "<td>";
             if (opts.downsample > 0) {

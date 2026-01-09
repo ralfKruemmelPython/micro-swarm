@@ -20,7 +20,8 @@ float sample_field(const GridField &field, float fx, float fy) {
 }
 } // namespace
 
-void Agent::step(Rng &rng, const SimParams &params, GridField &pheromone, GridField &molecules, GridField &resources) {
+void Agent::step(Rng &rng, const SimParams &params, int fitness_window, GridField &pheromone, GridField &molecules, GridField &resources) {
+    last_energy = energy;
     const float sensor = params.agent_sense_radius * genome.sense_gain;
     const float turn = params.agent_random_turn;
 
@@ -79,5 +80,16 @@ void Agent::step(Rng &rng, const SimParams &params, GridField &pheromone, GridFi
     energy -= params.agent_move_cost;
     if (energy < 0.0f) {
         energy = 0.0f;
+    }
+
+    float delta = energy - last_energy;
+    if (delta > 0.0f) {
+        fitness_accum += delta;
+    }
+    fitness_ticks += 1;
+    if (fitness_window > 0 && fitness_ticks >= fitness_window) {
+        fitness_value = fitness_accum / static_cast<float>(fitness_ticks);
+        fitness_accum = 0.0f;
+        fitness_ticks = 0;
     }
 }

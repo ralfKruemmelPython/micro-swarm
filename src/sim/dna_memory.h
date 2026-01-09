@@ -17,10 +17,19 @@ struct DNAEntry {
     int age = 0;
 };
 
+struct EvoParams {
+    bool enabled = false;
+    float elite_frac = 0.20f;
+    float mutation_sigma = 0.05f;
+    float exploration_delta = 0.05f;
+    int fitness_window = 50;
+    float age_decay = 0.995f;
+};
+
 struct DNAMemory {
     std::vector<DNAEntry> entries;
 
-    void add(const SimParams &params, const Genome &genome, float fitness);
-    Genome sample(Rng &rng, const SimParams &params) const;
-    void decay();
+    void add(const SimParams &params, const Genome &genome, float fitness, const EvoParams &evo);
+    Genome sample(Rng &rng, const SimParams &params, const EvoParams &evo) const;
+    void decay(const EvoParams &evo);
 };

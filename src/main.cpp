@@ -28,8 +28,35 @@ struct CliOptions {
     int dump_every = 0;
     std::string dump_dir = "dumps";
     std::string dump_prefix = "swarm";
+    std::string dump_subdir;
     std::string report_html_path;
     int report_downsample = 32;
+    bool paper_mode = false;
+    bool report_global_norm = false;
+    int report_hist_bins = 64;
+    bool report_include_sparklines = true;
+
+    bool stress_enable = false;
+    int stress_at_step = 120;
+    bool stress_block_rect_set = false;
+    int stress_block_x = 0;
+    int stress_block_y = 0;
+    int stress_block_w = 0;
+    int stress_block_h = 0;
+    bool stress_shift_set = false;
+    int stress_shift_dx = 0;
+    int stress_shift_dy = 0;
+    float stress_pheromone_noise = 0.0f;
+    uint32_t stress_seed = 0;
+    bool stress_seed_set = false;
+
+    bool evo_enable = false;
+    float evo_elite_frac = 0.20f;
+    float evo_min_energy_to_store = 1.6f;
+    float evo_mutation_sigma = 0.05f;
+    float evo_exploration_delta = 0.05f;
+    int evo_fitness_window = 50;
+    float evo_age_decay = 0.995f;
 };
 
 void print_help() {
@@ -51,8 +78,26 @@ void print_help() {
               << "  --dump-every N   Dump-Intervall (0=aus)\n"
               << "  --dump-dir PATH  Dump-Verzeichnis\n"
               << "  --dump-prefix N  Dump-Dateiprefix\n"
+              << "  [subdir]         Optionaler letzter Parameter: Unterordner in dump-dir\n"
               << "  --report-html PATH  Report-HTML-Pfad\n"
               << "  --report-downsample N  Report-Downsample (0=aus)\n"
+              << "  --paper-mode           Paper-Modus aktivieren\n"
+              << "  --report-global-norm   Globale Normalisierung fuer Previews\n"
+              << "  --report-hist-bins N   Histogramm-Bins fuer Entropie\n"
+              << "  --report-no-sparklines Sparklines deaktivieren\n"
+              << "  --stress-enable                  Stress-Test aktivieren\n"
+              << "  --stress-at-step N               Stress-Zeitpunkt\n"
+              << "  --stress-block-rect x y w h      Ressourcen-Blockade\n"
+              << "  --stress-shift-hotspots dx dy    Hotspots verschieben\n"
+              << "  --stress-pheromone-noise F       Pheromon-Noise\n"
+              << "  --stress-seed N                  Seed fuer Stress-Noise\n"
+              << "  --evo-enable                     Evolution-Tuning aktivieren\n"
+              << "  --evo-elite-frac F               Elite-Anteil\n"
+              << "  --evo-min-energy-to-store F      Mindestenergie fuer Speicherung\n"
+              << "  --evo-mutation-sigma F           Mutationsstaerke\n"
+              << "  --evo-exploration-delta F        Exploration-Mutation\n"
+              << "  --evo-fitness-window N           Fitness-Fenster\n"
+              << "  --evo-age-decay F                Age-Decay pro Tick\n"
               << "  --help           Hilfe anzeigen\n";
 }
 
@@ -83,12 +128,77 @@ bool parse_float(const char *value, float &out) {
     }
 }
 
+bool parse_string(const char *value, std::string &out) {
+    if (!value) {
+        return false;
+    }
+    out = value;
+    return !out.empty();
+}
+
 bool parse_cli(int argc, char **argv, CliOptions &opts) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             print_help();
             return false;
+        }
+        if (!arg.empty() && arg[0] != '-' && i == argc - 1) {
+            if (!parse_string(arg.c_str(), opts.dump_subdir)) {
+                std::cerr << "Ungueltiger Wert fuer dump-subdir\n";
+                return false;
+            }
+            continue;
+        }
+        if (arg == "--paper-mode") {
+            opts.paper_mode = true;
+            continue;
+        }
+        if (arg == "--report-global-norm") {
+            opts.report_global_norm = true;
+            continue;
+        }
+        if (arg == "--report-no-sparklines") {
+            opts.report_include_sparklines = false;
+            continue;
+        }
+        if (arg == "--stress-enable") {
+            opts.stress_enable = true;
+            continue;
+        }
+        if (arg == "--evo-enable") {
+            opts.evo_enable = true;
+            continue;
+        }
+        if (arg == "--stress-block-rect") {
+            if (i + 4 >= argc) {
+                std::cerr << "Fehlender Wert fuer " << arg << "\n";
+                return false;
+            }
+            if (!parse_int(argv[i + 1], opts.stress_block_x) ||
+                !parse_int(argv[i + 2], opts.stress_block_y) ||
+                !parse_int(argv[i + 3], opts.stress_block_w) ||
+                !parse_int(argv[i + 4], opts.stress_block_h)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            opts.stress_block_rect_set = true;
+            i += 4;
+            continue;
+        }
+        if (arg == "--stress-shift-hotspots") {
+            if (i + 2 >= argc) {
+                std::cerr << "Fehlender Wert fuer " << arg << "\n";
+                return false;
+            }
+            if (!parse_int(argv[i + 1], opts.stress_shift_dx) ||
+                !parse_int(argv[i + 2], opts.stress_shift_dy)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            opts.stress_shift_set = true;
+            i += 2;
+            continue;
         }
         if (i + 1 >= argc) {
             std::cerr << "Fehlender Wert fuer " << arg << "\n";
@@ -164,13 +274,73 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
                 return false;
             }
         } else if (arg == "--dump-dir") {
-            opts.dump_dir = value;
+            if (!parse_string(value, opts.dump_dir)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--dump-prefix") {
-            opts.dump_prefix = value;
+            if (!parse_string(value, opts.dump_prefix)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--report-html") {
-            opts.report_html_path = value;
+            if (!parse_string(value, opts.report_html_path)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--report-downsample") {
             if (!parse_int(value, opts.report_downsample)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--report-hist-bins") {
+            if (!parse_int(value, opts.report_hist_bins)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--stress-at-step") {
+            if (!parse_int(value, opts.stress_at_step)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--stress-pheromone-noise") {
+            if (!parse_float(value, opts.stress_pheromone_noise)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--stress-seed") {
+            if (!parse_seed(value, opts.stress_seed)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            opts.stress_seed_set = true;
+        } else if (arg == "--evo-elite-frac") {
+            if (!parse_float(value, opts.evo_elite_frac)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--evo-min-energy-to-store") {
+            if (!parse_float(value, opts.evo_min_energy_to_store)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--evo-mutation-sigma") {
+            if (!parse_float(value, opts.evo_mutation_sigma)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--evo-exploration-delta") {
+            if (!parse_float(value, opts.evo_exploration_delta)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--evo-fitness-window") {
+            if (!parse_int(value, opts.evo_fitness_window)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--evo-age-decay") {
+            if (!parse_float(value, opts.evo_age_decay)) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
                 return false;
             }
@@ -190,6 +360,49 @@ int main(int argc, char **argv) {
     }
     SimParams params = opts.params;
     Rng rng(opts.seed);
+    if (!opts.stress_seed_set) {
+        opts.stress_seed = opts.seed;
+    }
+
+    if (opts.evo_enable) {
+        if (opts.evo_elite_frac <= 0.0f || opts.evo_elite_frac > 1.0f) {
+            std::cerr << "Ungueltiger Wert fuer --evo-elite-frac\n";
+            return 1;
+        }
+        if (opts.evo_fitness_window <= 0) {
+            std::cerr << "Ungueltiger Wert fuer --evo-fitness-window\n";
+            return 1;
+        }
+        if (opts.evo_mutation_sigma < 0.0f || opts.evo_exploration_delta < 0.0f) {
+            std::cerr << "Ungueltiger Wert fuer Evo-Mutationsparameter\n";
+            return 1;
+        }
+        if (opts.evo_age_decay <= 0.0f || opts.evo_age_decay > 1.0f) {
+            std::cerr << "Ungueltiger Wert fuer --evo-age-decay\n";
+            return 1;
+        }
+    }
+    if (opts.dump_every < 0) {
+        std::cerr << "Ungueltiger Wert fuer --dump-every\n";
+        return 1;
+    }
+    if (opts.report_downsample < 0) {
+        std::cerr << "Ungueltiger Wert fuer --report-downsample\n";
+        return 1;
+    }
+    if (opts.report_hist_bins <= 0) {
+        std::cerr << "Ungueltiger Wert fuer --report-hist-bins\n";
+        return 1;
+    }
+    if (!opts.dump_subdir.empty()) {
+        std::filesystem::path base_dir = opts.dump_dir;
+        std::filesystem::path sub_dir = opts.dump_subdir;
+        opts.dump_dir = (base_dir / sub_dir).string();
+        if (!opts.report_html_path.empty()) {
+            std::filesystem::path report_path = opts.report_html_path;
+            opts.report_html_path = (std::filesystem::path(opts.dump_dir) / report_path.filename()).string();
+        }
+    }
 
     GridData resources_data;
     GridData pheromone_data;
@@ -240,6 +453,13 @@ int main(int argc, char **argv) {
     }
 
     DNAMemory dna;
+    EvoParams evo;
+    evo.enabled = opts.evo_enable;
+    evo.elite_frac = opts.evo_elite_frac;
+    evo.mutation_sigma = opts.evo_mutation_sigma;
+    evo.exploration_delta = opts.evo_exploration_delta;
+    evo.fitness_window = opts.evo_fitness_window;
+    evo.age_decay = opts.evo_age_decay;
     std::vector<Agent> agents;
     agents.reserve(params.agent_count);
 
@@ -249,7 +469,7 @@ int main(int argc, char **argv) {
         agent.y = static_cast<float>(rng.uniform_int(0, params.height - 1));
         agent.heading = rng.uniform(0.0f, 6.283185307f);
         agent.energy = rng.uniform(0.2f, 0.6f);
-        agent.genome = dna.sample(rng, params);
+        agent.genome = dna.sample(rng, params, evo);
         agents.push_back(agent);
     }
 
@@ -290,24 +510,53 @@ int main(int argc, char **argv) {
         return true;
     };
 
+    bool stress_applied = false;
+    Rng stress_rng(opts.stress_seed);
+    std::vector<SystemMetrics> system_metrics;
+    system_metrics.reserve(static_cast<size_t>(params.steps));
+
     for (int step = 0; step < params.steps; ++step) {
+        if (opts.stress_enable && !stress_applied && step >= opts.stress_at_step) {
+            if (opts.stress_block_rect_set) {
+                env.apply_block_rect(opts.stress_block_x, opts.stress_block_y, opts.stress_block_w, opts.stress_block_h);
+            }
+            if (opts.stress_shift_set) {
+                env.shift_hotspots(opts.stress_shift_dx, opts.stress_shift_dy);
+            }
+            stress_applied = true;
+            std::cout << "[stress] applied at step=" << step << "\n";
+        }
         if (!dump_fields(step)) {
             return 1;
         }
         for (auto &agent : agents) {
-            agent.step(rng, params, pheromone, molecules, env.resources);
-            if (agent.energy > 1.2f) {
-                dna.add(params, agent.genome, agent.energy);
-                agent.energy *= 0.6f;
+            agent.step(rng, params, opts.evo_enable ? opts.evo_fitness_window : 0, pheromone, molecules, env.resources);
+            if (opts.evo_enable) {
+                if (agent.energy > opts.evo_min_energy_to_store) {
+                    dna.add(params, agent.genome, agent.fitness_value, evo);
+                    agent.energy *= 0.6f;
+                }
+            } else {
+                if (agent.energy > 1.2f) {
+                    dna.add(params, agent.genome, agent.energy, evo);
+                    agent.energy *= 0.6f;
+                }
             }
         }
 
         diffuse_and_evaporate(pheromone, pheromone_params);
         diffuse_and_evaporate(molecules, molecule_params);
 
+        if (opts.stress_enable && stress_applied && opts.stress_pheromone_noise > 0.0f) {
+            for (float &v : pheromone.data) {
+                v += stress_rng.uniform(0.0f, opts.stress_pheromone_noise);
+                if (v < 0.0f) v = 0.0f;
+            }
+        }
+
         mycel.update(params, pheromone, env.resources);
         env.regenerate(params);
-        dna.decay();
+        dna.decay(evo);
 
         for (auto &agent : agents) {
             if (agent.energy <= 0.05f) {
@@ -315,17 +564,23 @@ int main(int argc, char **argv) {
                 agent.y = static_cast<float>(rng.uniform_int(0, params.height - 1));
                 agent.heading = rng.uniform(0.0f, 6.283185307f);
                 agent.energy = rng.uniform(0.2f, 0.5f);
-                agent.genome = dna.sample(rng, params);
+                agent.last_energy = agent.energy;
+                agent.fitness_accum = 0.0f;
+                agent.fitness_ticks = 0;
+                agent.fitness_value = 0.0f;
+                agent.genome = dna.sample(rng, params, evo);
             }
         }
 
-        if (step % 10 == 0) {
-            float avg_energy = 0.0f;
-            for (const auto &agent : agents) {
-                avg_energy += agent.energy;
-            }
-            avg_energy /= static_cast<float>(agents.size());
+        float avg_energy = 0.0f;
+        for (const auto &agent : agents) {
+            avg_energy += agent.energy;
+        }
+        avg_energy /= static_cast<float>(agents.size());
 
+        system_metrics.push_back({step, static_cast<int>(dna.entries.size()), avg_energy});
+
+        if (step % 10 == 0) {
             float mycel_sum = 0.0f;
             for (float v : mycel.density.data) {
                 mycel_sum += v;
@@ -346,6 +601,27 @@ int main(int argc, char **argv) {
         report_opts.dump_prefix = opts.dump_prefix;
         report_opts.report_html_path = opts.report_html_path;
         report_opts.downsample = opts.report_downsample;
+        report_opts.paper_mode = opts.paper_mode;
+        report_opts.global_normalization = opts.report_global_norm;
+        report_opts.hist_bins = opts.report_hist_bins;
+        report_opts.include_sparklines = opts.report_include_sparklines;
+        report_opts.system_metrics = system_metrics;
+        if (opts.stress_enable) {
+            std::ostringstream scenario;
+            scenario << "stress_enable=true";
+            scenario << ", at_step=" << opts.stress_at_step;
+            if (opts.stress_block_rect_set) {
+                scenario << ", block_rect=" << opts.stress_block_x << "," << opts.stress_block_y << ","
+                         << opts.stress_block_w << "," << opts.stress_block_h;
+            }
+            if (opts.stress_shift_set) {
+                scenario << ", shift_hotspots=" << opts.stress_shift_dx << "," << opts.stress_shift_dy;
+            }
+            if (opts.stress_pheromone_noise > 0.0f) {
+                scenario << ", pheromone_noise=" << opts.stress_pheromone_noise;
+            }
+            report_opts.scenario_summary = scenario.str();
+        }
         std::string report_error;
         if (!generate_dump_report_html(report_opts, report_error)) {
             std::cerr << "Report-Fehler: " << report_error << "\n";
