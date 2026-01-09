@@ -20,10 +20,17 @@ float sample_field(const GridField &field, float fx, float fy) {
 }
 } // namespace
 
-void Agent::step(Rng &rng, const SimParams &params, int fitness_window, GridField &pheromone, GridField &molecules, GridField &resources) {
+void Agent::step(Rng &rng,
+                 const SimParams &params,
+                 int fitness_window,
+                 const SpeciesProfile &profile,
+                 GridField &phero_food,
+                 GridField &phero_danger,
+                 GridField &molecules,
+                 GridField &resources) {
     last_energy = energy;
     const float sensor = params.agent_sense_radius * genome.sense_gain;
-    const float turn = params.agent_random_turn;
+    const float turn = params.agent_random_turn * profile.exploration_mul;
 
     float angles[3] = {
         heading - 0.6f,
@@ -35,10 +42,13 @@ void Agent::step(Rng &rng, const SimParams &params, int fitness_window, GridFiel
     for (int i = 0; i < 3; ++i) {
         float nx = x + std::cos(angles[i]) * sensor;
         float ny = y + std::sin(angles[i]) * sensor;
-        float p = sample_field(pheromone, nx, ny) * genome.pheromone_gain;
+        float p_food = sample_field(phero_food, nx, ny) * genome.pheromone_gain * profile.food_attraction_mul;
+        float p_danger = sample_field(phero_danger, nx, ny) * genome.pheromone_gain * profile.danger_aversion_mul;
         float r = sample_field(resources, nx, ny);
         float m = sample_field(molecules, nx, ny);
-        weights[i] = p + r + 0.25f * m + 0.01f;
+        float w = p_food + r + 0.25f * m - p_danger;
+        if (w < 0.001f) w = 0.001f;
+        weights[i] = w;
     }
 
     float total = weights[0] + weights[1] + weights[2];
@@ -57,11 +67,13 @@ void Agent::step(Rng &rng, const SimParams &params, int fitness_window, GridFiel
     float nx = x + std::cos(heading);
     float ny = y + std::sin(heading);
 
-    if (nx >= 0.0f && ny >= 0.0f && nx < pheromone.width && ny < pheromone.height) {
+    bool bounced = false;
+    if (nx >= 0.0f && ny >= 0.0f && nx < phero_food.width && ny < phero_food.height) {
         x = nx;
         y = ny;
     } else {
         heading = wrap_angle(heading + 3.1415926f);
+        bounced = true;
     }
 
     int cx = static_cast<int>(x);
@@ -72,8 +84,8 @@ void Agent::step(Rng &rng, const SimParams &params, int fitness_window, GridFiel
         cell -= harvested;
         energy += harvested;
 
-        float deposit = params.agent_deposit_scale * harvested;
-        pheromone.at(cx, cy) += deposit;
+        float deposit = params.phero_food_deposit_scale * harvested;
+        phero_food.at(cx, cy) += deposit * profile.deposit_food_mul;
         molecules.at(cx, cy) += harvested * 0.5f;
     }
 
@@ -91,5 +103,20 @@ void Agent::step(Rng &rng, const SimParams &params, int fitness_window, GridFiel
         fitness_value = fitness_accum / static_cast<float>(fitness_ticks);
         fitness_accum = 0.0f;
         fitness_ticks = 0;
+    }
+
+    float danger_deposit = 0.0f;
+    if (bounced) {
+        danger_deposit += params.danger_bounce_deposit;
+    }
+    if (delta < -params.danger_delta_threshold) {
+        danger_deposit += (-delta) * params.phero_danger_deposit_scale;
+    }
+    if (danger_deposit > 0.0f) {
+        int dx = static_cast<int>(x);
+        int dy = static_cast<int>(y);
+        if (dx >= 0 && dy >= 0 && dx < phero_danger.width && dy < phero_danger.height) {
+            phero_danger.at(dx, dy) += danger_deposit * profile.deposit_danger_mul;
+        }
     }
 }

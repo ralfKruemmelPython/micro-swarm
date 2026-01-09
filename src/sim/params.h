@@ -30,5 +30,11 @@ struct SimParams {
     float agent_random_turn = 0.2f;
 
     int dna_capacity = 256;
+    int dna_global_capacity = 128;
     float dna_survival_bias = 0.7f;
+
+    float phero_food_deposit_scale = 0.8f;
+    float phero_danger_deposit_scale = 0.6f;
+    float danger_delta_threshold = 0.05f;
+    float danger_bounce_deposit = 0.02f;
 };

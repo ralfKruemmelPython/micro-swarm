@@ -2,13 +2,14 @@
 
 #include <algorithm>
 
-void DNAMemory::add(const SimParams &params, const Genome &genome, float fitness, const EvoParams &evo) {
+void DNAMemory::add(const SimParams &params, const Genome &genome, float fitness, const EvoParams &evo, int capacity_override) {
     entries.push_back({genome, fitness, 0});
     std::sort(entries.begin(), entries.end(), [](const DNAEntry &a, const DNAEntry &b) {
         return a.fitness > b.fitness;
     });
-    if (static_cast<int>(entries.size()) > params.dna_capacity) {
-        entries.resize(params.dna_capacity);
+    int capacity = (capacity_override > 0) ? capacity_override : params.dna_capacity;
+    if (static_cast<int>(entries.size()) > capacity) {
+        entries.resize(capacity);
     }
 }
 

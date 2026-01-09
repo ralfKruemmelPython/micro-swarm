@@ -4,8 +4,11 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cmath>
+#include <array>
 
 #include "compute/opencl_loader.h"
+#include "compute/opencl_runtime.h"
 #include "sim/agent.h"
 #include "sim/dna_memory.h"
 #include "sim/environment.h"
@@ -36,6 +39,12 @@ struct CliOptions {
     int report_hist_bins = 64;
     bool report_include_sparklines = true;
 
+    bool ocl_enable = false;
+    int ocl_device = 0;
+    int ocl_platform = 0;
+    bool ocl_print_devices = false;
+    bool ocl_no_copyback = false;
+
     bool stress_enable = false;
     int stress_at_step = 120;
     bool stress_block_rect_set = false;
@@ -57,12 +66,38 @@ struct CliOptions {
     float evo_exploration_delta = 0.05f;
     int evo_fitness_window = 50;
     float evo_age_decay = 0.995f;
+
+    std::array<SpeciesProfile, 4> species_profiles;
+    std::array<float, 4> species_fracs{0.40f, 0.25f, 0.20f, 0.15f};
+    float global_spawn_frac = 0.15f;
 };
+
+std::array<SpeciesProfile, 4> default_species_profiles() {
+    return {
+        SpeciesProfile{1.0f, 1.2f, 0.8f, 1.0f, 0.7f},
+        SpeciesProfile{1.1f, 1.0f, 1.0f, 0.9f, 0.9f},
+        SpeciesProfile{0.9f, 1.3f, 0.7f, 1.1f, 0.6f},
+        SpeciesProfile{1.2f, 0.9f, 1.2f, 0.8f, 1.1f}
+    };
+}
+
+int pick_species(Rng &rng, const std::array<float, 4> &fracs) {
+    float r = rng.uniform(0.0f, 1.0f);
+    float accum = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+        accum += fracs[i];
+        if (r <= accum) {
+            return i;
+        }
+    }
+    return 3;
+}
 
 void print_help() {
     std::cout << "micro_swarm Optionen:\n"
               << "  --width N        Rasterbreite\n"
               << "  --height N       Rasterhoehe\n"
+              << "  --size N         Setzt Breite und Hoehe gleich\n"
               << "  --agents N       Anzahl Agenten\n"
               << "  --steps N        Simulationsschritte\n"
               << "  --seed N         RNG-Seed\n"
@@ -75,6 +110,10 @@ void print_help() {
               << "  --mycel-threshold F  Mycel-Drive-Schwelle\n"
               << "  --mycel-drive-p F    Mycel-Drive-Gewicht Pheromon\n"
               << "  --mycel-drive-r F    Mycel-Drive-Gewicht Ressourcen\n"
+              << "  --phero-food-deposit F     Pheromon Food Deposit\n"
+              << "  --phero-danger-deposit F   Pheromon Danger Deposit\n"
+              << "  --danger-delta-threshold F Danger Delta Schwelle\n"
+              << "  --danger-bounce-deposit F  Danger Deposit bei Bounce\n"
               << "  --dump-every N   Dump-Intervall (0=aus)\n"
               << "  --dump-dir PATH  Dump-Verzeichnis\n"
               << "  --dump-prefix N  Dump-Dateiprefix\n"
@@ -85,6 +124,16 @@ void print_help() {
               << "  --report-global-norm   Globale Normalisierung fuer Previews\n"
               << "  --report-hist-bins N   Histogramm-Bins fuer Entropie\n"
               << "  --report-no-sparklines Sparklines deaktivieren\n"
+              << "  --ocl-enable           OpenCL Diffusion aktivieren\n"
+              << "  --ocl-device N         OpenCL Device Index\n"
+              << "  --ocl-platform N       OpenCL Platform Index\n"
+              << "  --ocl-print-devices    OpenCL Platforms/Devices auflisten\n"
+              << "  --ocl-no-copyback      Host-Backcopy nur bei Dump/Ende\n"
+              << "  --gpu N                Alias fuer OpenCL (0=aus, 1=an)\n"
+              << "  --species-fracs f0 f1 f2 f3           Spezies-Anteile\n"
+              << "  --species-profile S e f d df dd       Spezies-Profilwerte\n"
+              << "  --global-spawn-frac F                 Anteil Spawn aus Global-Pool\n"
+              << "  --dna-global-capacity N               Kapazitaet Global-Pool\n"
               << "  --stress-enable                  Stress-Test aktivieren\n"
               << "  --stress-at-step N               Stress-Zeitpunkt\n"
               << "  --stress-block-rect x y w h      Ressourcen-Blockade\n"
@@ -143,6 +192,18 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
             print_help();
             return false;
         }
+        if (arg == "--ocl-enable") {
+            opts.ocl_enable = true;
+            continue;
+        }
+        if (arg == "--ocl-print-devices") {
+            opts.ocl_print_devices = true;
+            continue;
+        }
+        if (arg == "--ocl-no-copyback") {
+            opts.ocl_no_copyback = true;
+            continue;
+        }
         if (!arg.empty() && arg[0] != '-' && i == argc - 1) {
             if (!parse_string(arg.c_str(), opts.dump_subdir)) {
                 std::cerr << "Ungueltiger Wert fuer dump-subdir\n";
@@ -200,22 +261,71 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
             i += 2;
             continue;
         }
+        if (arg == "--species-fracs") {
+            if (i + 4 >= argc) {
+                std::cerr << "Fehlender Wert fuer " << arg << "\n";
+                return false;
+            }
+            for (int s = 0; s < 4; ++s) {
+                float v = 0.0f;
+                if (!parse_float(argv[i + 1 + s], v)) {
+                    std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                    return false;
+                }
+                opts.species_fracs[s] = v;
+            }
+            i += 4;
+            continue;
+        }
+        if (arg == "--species-profile") {
+            if (i + 6 >= argc) {
+                std::cerr << "Fehlender Wert fuer " << arg << "\n";
+                return false;
+            }
+            int s = 0;
+            if (!parse_int(argv[i + 1], s) || s < 0 || s > 3) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            float e = 0.0f, fa = 0.0f, da = 0.0f, df = 0.0f, dd = 0.0f;
+            if (!parse_float(argv[i + 2], e) ||
+                !parse_float(argv[i + 3], fa) ||
+                !parse_float(argv[i + 4], da) ||
+                !parse_float(argv[i + 5], df) ||
+                !parse_float(argv[i + 6], dd)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            opts.species_profiles[s] = SpeciesProfile{e, fa, da, df, dd};
+            i += 6;
+            continue;
+        }
         if (i + 1 >= argc) {
             std::cerr << "Fehlender Wert fuer " << arg << "\n";
             return false;
         }
         const char *value = argv[++i];
-        if (arg == "--width") {
+        if (arg == "--width" || arg == "--wight") {
             if (!parse_int(value, opts.params.width)) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
                 return false;
             }
             opts.width_set = true;
-        } else if (arg == "--height") {
+        } else if (arg == "--height" || arg == "--hight") {
             if (!parse_int(value, opts.params.height)) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
                 return false;
             }
+            opts.height_set = true;
+        } else if (arg == "--size") {
+            int size = 0;
+            if (!parse_int(value, size)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            opts.params.width = size;
+            opts.params.height = size;
+            opts.width_set = true;
             opts.height_set = true;
         } else if (arg == "--agents") {
             if (!parse_int(value, opts.params.agent_count)) {
@@ -268,6 +378,26 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
                 return false;
             }
+        } else if (arg == "--phero-food-deposit") {
+            if (!parse_float(value, opts.params.phero_food_deposit_scale)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--phero-danger-deposit") {
+            if (!parse_float(value, opts.params.phero_danger_deposit_scale)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--danger-delta-threshold") {
+            if (!parse_float(value, opts.params.danger_delta_threshold)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--danger-bounce-deposit") {
+            if (!parse_float(value, opts.params.danger_bounce_deposit)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--dump-every") {
             if (!parse_int(value, opts.dump_every)) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
@@ -295,6 +425,33 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
             }
         } else if (arg == "--report-hist-bins") {
             if (!parse_int(value, opts.report_hist_bins)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--global-spawn-frac") {
+            if (!parse_float(value, opts.global_spawn_frac)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--dna-global-capacity") {
+            if (!parse_int(value, opts.params.dna_global_capacity)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--gpu") {
+            int gpu = 0;
+            if (!parse_int(value, gpu) || (gpu != 0 && gpu != 1)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+            opts.ocl_enable = (gpu == 1);
+        } else if (arg == "--ocl-device") {
+            if (!parse_int(value, opts.ocl_device)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--ocl-platform") {
+            if (!parse_int(value, opts.ocl_platform)) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
                 return false;
             }
@@ -355,8 +512,19 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
 
 int main(int argc, char **argv) {
     CliOptions opts;
+    opts.species_profiles = default_species_profiles();
     if (!parse_cli(argc, argv, opts)) {
         return 1;
+    }
+    if (opts.ocl_print_devices) {
+        std::string output;
+        std::string err;
+        if (!OpenCLRuntime::print_devices(output, err)) {
+            std::cerr << "[OpenCL] " << err << "\n";
+            return 1;
+        }
+        std::cout << output;
+        return 0;
     }
     SimParams params = opts.params;
     Rng rng(opts.seed);
@@ -393,6 +561,32 @@ int main(int argc, char **argv) {
     if (opts.report_hist_bins <= 0) {
         std::cerr << "Ungueltiger Wert fuer --report-hist-bins\n";
         return 1;
+    }
+    if (opts.global_spawn_frac < 0.0f || opts.global_spawn_frac > 1.0f) {
+        std::cerr << "Ungueltiger Wert fuer --global-spawn-frac\n";
+        return 1;
+    }
+    if (params.dna_global_capacity <= 0) {
+        std::cerr << "Ungueltiger Wert fuer --dna-global-capacity\n";
+        return 1;
+    }
+    {
+        float sum = 0.0f;
+        for (float f : opts.species_fracs) {
+            if (f < 0.0f) {
+                std::cerr << "Ungueltiger Wert fuer --species-fracs\n";
+                return 1;
+            }
+            sum += f;
+        }
+        if (std::abs(sum - 1.0f) > 1e-3f) {
+            std::cerr << "Ungueltige Summe fuer --species-fracs (muss ~1.0 sein)\n";
+            return 1;
+        }
+    }
+    if (opts.ocl_no_copyback && params.agent_count > 0) {
+        std::cerr << "[OpenCL] ocl-no-copyback ist mit aktiven Agenten nicht kompatibel, erzwungenes Copyback.\n";
+        opts.ocl_no_copyback = false;
     }
     if (!opts.dump_subdir.empty()) {
         std::filesystem::path base_dir = opts.dump_dir;
@@ -432,8 +626,8 @@ int main(int argc, char **argv) {
     if (!apply_dataset(opts.pheromone_path, pheromone_data, "pheromone")) return 1;
     if (!apply_dataset(opts.molecules_path, molecules_data, "molecules")) return 1;
 
-    OpenCLStatus ocl = probe_opencl();
-    std::cout << "[OpenCL] " << ocl.message << "\n";
+    OpenCLStatus ocl_probe = probe_opencl();
+    std::cout << "[OpenCL] " << ocl_probe.message << "\n";
 
     Environment env(params.width, params.height);
     if (!resources_data.values.empty()) {
@@ -442,17 +636,19 @@ int main(int argc, char **argv) {
         env.seed_resources(rng);
     }
 
-    GridField pheromone(params.width, params.height, 0.0f);
+    GridField phero_food(params.width, params.height, 0.0f);
+    GridField phero_danger(params.width, params.height, 0.0f);
     GridField molecules(params.width, params.height, 0.0f);
     MycelNetwork mycel(params.width, params.height);
     if (!pheromone_data.values.empty()) {
-        pheromone.data = pheromone_data.values;
+        phero_food.data = pheromone_data.values;
     }
     if (!molecules_data.values.empty()) {
         molecules.data = molecules_data.values;
     }
 
-    DNAMemory dna;
+    std::array<DNAMemory, 4> dna_species;
+    DNAMemory dna_global;
     EvoParams evo;
     evo.enabled = opts.evo_enable;
     evo.elite_frac = opts.evo_elite_frac;
@@ -463,18 +659,130 @@ int main(int argc, char **argv) {
     std::vector<Agent> agents;
     agents.reserve(params.agent_count);
 
+    auto sample_genome = [&](int species) -> Genome {
+        if (opts.evo_enable && !dna_global.entries.empty() && rng.uniform(0.0f, 1.0f) < opts.global_spawn_frac) {
+            return dna_global.sample(rng, params, evo);
+        }
+        return dna_species[species].sample(rng, params, evo);
+    };
+
+    const float global_epsilon = 1e-6f;
+    auto maybe_add_global = [&](const Genome &genome, float fitness) {
+        if (!opts.evo_enable) {
+            return;
+        }
+        if (params.dna_global_capacity <= 0) {
+            return;
+        }
+        if (dna_global.entries.size() < static_cast<size_t>(params.dna_global_capacity)) {
+            dna_global.add(params, genome, fitness, evo, params.dna_global_capacity);
+            return;
+        }
+        float worst = dna_global.entries.back().fitness;
+        if (fitness > worst + global_epsilon) {
+            dna_global.add(params, genome, fitness, evo, params.dna_global_capacity);
+        }
+    };
+
     for (int i = 0; i < params.agent_count; ++i) {
         Agent agent;
         agent.x = static_cast<float>(rng.uniform_int(0, params.width - 1));
         agent.y = static_cast<float>(rng.uniform_int(0, params.height - 1));
         agent.heading = rng.uniform(0.0f, 6.283185307f);
         agent.energy = rng.uniform(0.2f, 0.6f);
-        agent.genome = dna.sample(rng, params, evo);
+        agent.species = pick_species(rng, opts.species_fracs);
+        agent.genome = sample_genome(agent.species);
         agents.push_back(agent);
     }
 
     FieldParams pheromone_params{params.pheromone_evaporation, params.pheromone_diffusion};
     FieldParams molecule_params{params.molecule_evaporation, params.molecule_diffusion};
+
+    OpenCLRuntime ocl_runtime;
+    bool ocl_active = false;
+    if (opts.ocl_enable) {
+        std::string ocl_error;
+        if (!ocl_runtime.init(opts.ocl_platform, opts.ocl_device, ocl_error)) {
+            std::cerr << "[OpenCL] init failed, fallback to CPU: " << ocl_error << "\n";
+        } else if (!ocl_runtime.build_kernels(ocl_error)) {
+            std::cerr << "[OpenCL] kernel build failed, fallback to CPU: " << ocl_error << "\n";
+        } else if (!ocl_runtime.init_fields(phero_food, phero_danger, molecules, ocl_error)) {
+            std::cerr << "[OpenCL] buffer init failed, fallback to CPU: " << ocl_error << "\n";
+        } else {
+            std::cout << "[OpenCL] platform/device: " << ocl_runtime.device_info() << "\n";
+            std::cout << "[OpenCL] kernels built\n";
+            ocl_active = true;
+        }
+    }
+
+    auto run_ocl_self_test = [&](OpenCLRuntime &runtime) -> bool {
+        GridField pf(16, 16, 0.0f);
+        GridField pd(16, 16, 0.0f);
+        GridField m(16, 16, 0.0f);
+        for (int y = 0; y < pf.height; ++y) {
+            for (int x = 0; x < pf.width; ++x) {
+                float v = rng.uniform(0.0f, 1.0f);
+                pf.at(x, y) = v;
+                pd.at(x, y) = 1.0f - v;
+                m.at(x, y) = 1.0f - v;
+            }
+        }
+        GridField cpu_pf = pf;
+        GridField cpu_pd = pd;
+        GridField cpu_m = m;
+        FieldParams fp{0.02f, 0.15f};
+        FieldParams fm{0.35f, 0.25f};
+        for (int i = 0; i < 5; ++i) {
+            diffuse_and_evaporate(cpu_pf, fp);
+            diffuse_and_evaporate(cpu_pd, fp);
+            diffuse_and_evaporate(cpu_m, fm);
+        }
+
+        std::string error;
+        if (!runtime.init_fields(pf, pd, m, error)) {
+            std::cerr << "[OpenCL] self-test init failed: " << error << "\n";
+            return false;
+        }
+        for (int i = 0; i < 5; ++i) {
+            if (!runtime.step_diffuse(fp, fm, true, pf, pd, m, error)) {
+                std::cerr << "[OpenCL] self-test step failed: " << error << "\n";
+                return false;
+            }
+        }
+        double mean_diff = 0.0;
+        double max_abs = 0.0;
+        for (size_t i = 0; i < pf.data.size(); ++i) {
+            double d1 = std::abs(static_cast<double>(pf.data[i]) - cpu_pf.data[i]);
+            double d2 = std::abs(static_cast<double>(pd.data[i]) - cpu_pd.data[i]);
+            mean_diff += d1 + d2;
+            if (d1 > max_abs) max_abs = d1;
+            if (d2 > max_abs) max_abs = d2;
+        }
+        mean_diff /= static_cast<double>(pf.data.size() * 2);
+        std::cout << "[OpenCL] self-test mean_diff=" << mean_diff << " max_abs=" << max_abs << "\n";
+        if (max_abs > 1e-3) {
+            std::cerr << "[OpenCL] self-test too large diff, fallback to CPU\n";
+            return false;
+        }
+        return true;
+    };
+
+    if (ocl_active) {
+        if (!run_ocl_self_test(ocl_runtime)) {
+            ocl_active = false;
+        } else {
+            std::string ocl_error;
+            if (!ocl_runtime.init_fields(phero_food, phero_danger, molecules, ocl_error)) {
+                std::cerr << "[OpenCL] buffer init failed, fallback to CPU: " << ocl_error << "\n";
+                ocl_active = false;
+            } else {
+                std::cout << "[OpenCL] using GPU diffusion\n";
+                if (opts.ocl_no_copyback) {
+                    std::cout << "[OpenCL] no-copyback enabled\n";
+                }
+            }
+        }
+    }
 
     if (opts.dump_every > 0) {
         std::error_code ec;
@@ -504,7 +812,8 @@ int main(int argc, char **argv) {
         };
 
         if (!dump_one("_resources.csv", env.resources)) return false;
-        if (!dump_one("_pheromone.csv", pheromone)) return false;
+        if (!dump_one("_phero_food.csv", phero_food)) return false;
+        if (!dump_one("_phero_danger.csv", phero_danger)) return false;
         if (!dump_one("_molecules.csv", molecules)) return false;
         if (!dump_one("_mycel.csv", mycel.density)) return false;
         return true;
@@ -516,6 +825,14 @@ int main(int argc, char **argv) {
     system_metrics.reserve(static_cast<size_t>(params.steps));
 
     for (int step = 0; step < params.steps; ++step) {
+        bool dump_step = (opts.dump_every > 0 && step % opts.dump_every == 0);
+        if (ocl_active && opts.ocl_no_copyback && dump_step) {
+            std::string ocl_error;
+            if (!ocl_runtime.copyback(phero_food, phero_danger, molecules, ocl_error)) {
+                std::cerr << "[OpenCL] copyback failed, fallback to CPU: " << ocl_error << "\n";
+                ocl_active = false;
+            }
+        }
         if (opts.stress_enable && !stress_applied && step >= opts.stress_at_step) {
             if (opts.stress_block_rect_set) {
                 env.apply_block_rect(opts.stress_block_x, opts.stress_block_y, opts.stress_block_w, opts.stress_block_h);
@@ -530,33 +847,63 @@ int main(int argc, char **argv) {
             return 1;
         }
         for (auto &agent : agents) {
-            agent.step(rng, params, opts.evo_enable ? opts.evo_fitness_window : 0, pheromone, molecules, env.resources);
+            const SpeciesProfile &profile = opts.species_profiles[agent.species];
+            agent.step(rng, params, opts.evo_enable ? opts.evo_fitness_window : 0, profile, phero_food, phero_danger, molecules, env.resources);
             if (opts.evo_enable) {
                 if (agent.energy > opts.evo_min_energy_to_store) {
-                    dna.add(params, agent.genome, agent.fitness_value, evo);
+                    dna_species[agent.species].add(params, agent.genome, agent.fitness_value, evo, params.dna_capacity);
+                    maybe_add_global(agent.genome, agent.fitness_value);
                     agent.energy *= 0.6f;
                 }
             } else {
                 if (agent.energy > 1.2f) {
-                    dna.add(params, agent.genome, agent.energy, evo);
+                    dna_species[agent.species].add(params, agent.genome, agent.energy, evo, params.dna_capacity);
                     agent.energy *= 0.6f;
                 }
             }
         }
 
-        diffuse_and_evaporate(pheromone, pheromone_params);
-        diffuse_and_evaporate(molecules, molecule_params);
+        if (ocl_active) {
+            std::string ocl_error;
+            if (!ocl_runtime.upload_fields(phero_food, phero_danger, molecules, ocl_error)) {
+                std::cerr << "[OpenCL] upload failed, fallback to CPU: " << ocl_error << "\n";
+                ocl_active = false;
+            }
+        }
+
+        if (ocl_active) {
+            bool do_copyback = (!opts.ocl_no_copyback) || dump_step;
+            std::string ocl_error;
+            if (!ocl_runtime.step_diffuse(pheromone_params, molecule_params, do_copyback, phero_food, phero_danger, molecules, ocl_error)) {
+                std::cerr << "[OpenCL] diffuse failed, fallback to CPU: " << ocl_error << "\n";
+                ocl_active = false;
+                diffuse_and_evaporate(phero_food, pheromone_params);
+                diffuse_and_evaporate(phero_danger, pheromone_params);
+                diffuse_and_evaporate(molecules, molecule_params);
+            }
+        } else {
+            diffuse_and_evaporate(phero_food, pheromone_params);
+            diffuse_and_evaporate(phero_danger, pheromone_params);
+            diffuse_and_evaporate(molecules, molecule_params);
+        }
 
         if (opts.stress_enable && stress_applied && opts.stress_pheromone_noise > 0.0f) {
-            for (float &v : pheromone.data) {
+            for (float &v : phero_food.data) {
+                v += stress_rng.uniform(0.0f, opts.stress_pheromone_noise);
+                if (v < 0.0f) v = 0.0f;
+            }
+            for (float &v : phero_danger.data) {
                 v += stress_rng.uniform(0.0f, opts.stress_pheromone_noise);
                 if (v < 0.0f) v = 0.0f;
             }
         }
 
-        mycel.update(params, pheromone, env.resources);
+        mycel.update(params, phero_food, env.resources);
         env.regenerate(params);
-        dna.decay(evo);
+        for (auto &pool : dna_species) {
+            pool.decay(evo);
+        }
+        dna_global.decay(evo);
 
         for (auto &agent : agents) {
             if (agent.energy <= 0.05f) {
@@ -568,17 +915,39 @@ int main(int argc, char **argv) {
                 agent.fitness_accum = 0.0f;
                 agent.fitness_ticks = 0;
                 agent.fitness_value = 0.0f;
-                agent.genome = dna.sample(rng, params, evo);
+                agent.species = pick_species(rng, opts.species_fracs);
+                agent.genome = sample_genome(agent.species);
             }
         }
 
         float avg_energy = 0.0f;
+        std::array<float, 4> energy_sum{0.0f, 0.0f, 0.0f, 0.0f};
+        std::array<int, 4> energy_count{0, 0, 0, 0};
         for (const auto &agent : agents) {
             avg_energy += agent.energy;
+            if (agent.species >= 0 && agent.species < 4) {
+                energy_sum[agent.species] += agent.energy;
+                energy_count[agent.species] += 1;
+            }
         }
         avg_energy /= static_cast<float>(agents.size());
 
-        system_metrics.push_back({step, static_cast<int>(dna.entries.size()), avg_energy});
+        SystemMetrics m;
+        m.step = step;
+        m.avg_agent_energy = avg_energy;
+        int dna_total = 0;
+        for (int s = 0; s < 4; ++s) {
+            m.dna_species_sizes[s] = static_cast<int>(dna_species[s].entries.size());
+            dna_total += m.dna_species_sizes[s];
+            if (energy_count[s] > 0) {
+                m.avg_energy_by_species[s] = energy_sum[s] / static_cast<float>(energy_count[s]);
+            } else {
+                m.avg_energy_by_species[s] = 0.0f;
+            }
+        }
+        m.dna_global_size = static_cast<int>(dna_global.entries.size());
+        m.dna_pool_size = dna_total;
+        system_metrics.push_back(m);
 
         if (step % 10 == 0) {
             float mycel_sum = 0.0f;
@@ -589,9 +958,17 @@ int main(int argc, char **argv) {
 
             std::cout << "step=" << step
                       << " avg_energy=" << avg_energy
-                      << " dna_pool=" << dna.entries.size()
+                      << " dna_pool=" << dna_total
                       << " mycel_avg=" << mycel_avg
                       << "\n";
+        }
+    }
+
+    if (ocl_active && opts.ocl_no_copyback) {
+        std::string ocl_error;
+        if (!ocl_runtime.copyback(phero_food, phero_danger, molecules, ocl_error)) {
+            std::cerr << "[OpenCL] final copyback failed: " << ocl_error << "\n";
+            return 1;
         }
     }
 

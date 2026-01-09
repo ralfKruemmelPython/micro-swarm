@@ -29,7 +29,7 @@ struct EvoParams {
 struct DNAMemory {
     std::vector<DNAEntry> entries;
 
-    void add(const SimParams &params, const Genome &genome, float fitness, const EvoParams &evo);
+    void add(const SimParams &params, const Genome &genome, float fitness, const EvoParams &evo, int capacity_override = -1);
     Genome sample(Rng &rng, const SimParams &params, const EvoParams &evo) const;
     void decay(const EvoParams &evo);
 };

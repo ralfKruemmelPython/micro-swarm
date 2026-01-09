@@ -115,6 +115,7 @@ if(Test-Path build){
 ```
 --width N
 --height N
+--size N
 --agents N
 --steps N
 --seed N
@@ -145,6 +146,10 @@ CSV-Format:
 --mycel-threshold F
 --mycel-drive-p F
 --mycel-drive-r F
+--phero-food-deposit F
+--phero-danger-deposit F
+--danger-delta-threshold F
+--danger-bounce-deposit F
 ```
 
 Diese Parameter erlauben **Live-Tuning**, ohne Recompile.
@@ -157,6 +162,7 @@ Diese Parameter erlauben **Live-Tuning**, ohne Recompile.
 --dump-every N        # 0 = aus
 --dump-dir PATH       # Default: dumps
 --dump-prefix NAME    # Default: swarm
+[subdir]             # Optional: letzter freier Parameter = Unterordner in dump-dir
 ```
 
 Beispiel:
@@ -178,10 +184,92 @@ dumps/
 
 ---
 
+### GPU / OpenCL (Diffusion auf der GPU)
+
+OpenCL ist optional und faellt bei Problemen automatisch auf CPU zurueck.
+
+```
+--ocl-enable
+--ocl-platform N
+--ocl-device N
+--ocl-print-devices
+--ocl-no-copyback
+--gpu N           # Alias fuer OpenCL (0=aus, 1=an)
+```
+
+Beispiele:
+
+```powershell
+# Geraete auflisten
+.\micro_swarm.exe --ocl-print-devices
+
+# GPU-Diffusion aktivieren (Platform 0, Device 0)
+.\micro_swarm.exe --steps 200 --agents 512 --ocl-enable --dump-every 50 --dump-dir dumps --dump-prefix gpu --report-html dumps\gpu_report.html
+
+# Alias
+.\micro_swarm.exe --steps 200 --agents 512 --gpu 1 --dump-every 50 --dump-dir dumps --dump-prefix gpu --report-html dumps\gpu_report.html
+```
+
+Hinweis: Mit `--ocl-no-copyback` werden Host-Daten nur bei Dump-Schritten und am Ende aktualisiert.
+Wenn Agenten aktiv sind, wird Copyback erzwungen (Sensorsignale benoetigen aktuelle Felder).
+
+---
+
+### Stress-Test
+
+```
+--stress-enable
+--stress-at-step N
+--stress-block-rect x y w h
+--stress-shift-hotspots dx dy
+--stress-pheromone-noise F
+--stress-seed N
+```
+
+---
+
+### Evolution
+
+```
+--evo-enable
+--evo-elite-frac F
+--evo-min-energy-to-store F
+--evo-mutation-sigma F
+--evo-exploration-delta F
+--evo-fitness-window N
+--evo-age-decay F
+--dna-global-capacity N
+--global-spawn-frac F
+```
+
+---
+
+### Spezies / Profile
+
+```
+--species-fracs f0 f1 f2 f3
+--species-profile S exploration food_attraction danger_aversion dep_food dep_danger
+```
+
+---
+
+### Report
+
+```
+--report-html PATH
+--report-downsample N
+--paper-mode
+--report-global-norm
+--report-hist-bins N
+--report-no-sparklines
+```
+
+---
+
 ## 1) **Baseline / Paper-Run**
 
 ```powershell
-.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix baseline --report-html dumps\baseline_report.html --report-downsample 32 --report-hist-bins 64 --paper-mode --report-global-norm Baseline-Paper_Run
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --size 128 --dump-every 50 --dump-dir dumps --dump-prefix baseline --report-html dumps\baseline_report.html --report-downsample 32 --report-hist-bins 64 --paper-mode --report-global-norm --species-fracs 0.40 0.25 0.20 0.15 --global-spawn-frac 0.15 Baseline-Paper_Run
 ```
 
 **Was das ist:**
@@ -209,7 +297,7 @@ Der **Referenzlauf** des Systems ohne externe Störungen und ohne Evolution-Tuni
 ## 2) **Stress-Test / Adaptionslauf**
 
 ```powershell
-.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix stress --report-html dumps\stress_report.html --report-downsample 32 --report-hist-bins 64 --stress-enable --stress-at-step 120 --stress-block-rect 40 40 30 30 --stress-pheromone-noise 0.004 --stress-seed 1337 Stress-Test_Adaptionslauf
+.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --size 128 --dump-every 50 --dump-dir dumps --dump-prefix stress --report-html dumps\stress_report.html --report-downsample 32 --report-hist-bins 64 --stress-enable --stress-at-step 120 --stress-block-rect 40 40 30 30 --stress-pheromone-noise 0.004 --stress-seed 1337 --species-fracs 0.40 0.25 0.20 0.15 --global-spawn-frac 0.15 Stress-Test_Adaptionslauf
 ```
 
 **Was das ist:**
@@ -238,7 +326,8 @@ Ein **Umwelt-Störungstest**, der die Robustheit und Adaptionsfähigkeit des Sch
 ## 3) **Evolution / Selektion scharf gestellt**
 
 ```powershell
-.\micro_swarm.exe --steps 500 --agents 512 --seed 42 --dump-every 50 --dump-dir dumps --dump-prefix evo --report-html dumps\evo_report.html --report-downsample 32 --report-hist-bins 64 --evo-enable --evo-elite-frac 0.20 --evo-min-energy-to-store 1.6 --evo-mutation-sigma 0.05 --evo-exploration-delta 0.05 --evo-fitness-window 50 --evo-age-decay 0.995 Evolution_Selektion_scharf_gestellt ```
+.\micro_swarm.exe --gpu 1 --steps 2000 --agents 512 --seed 42 --size 128 --dump-every 200 --dump-dir dumps --dump-prefix evo_turbo --report-html dumps\evo_turbo_report.html --report-downsample 32 --report-hist-bins 64 --evo-enable --evo-elite-frac 0.20 --evo-min-energy-to-store 1.2 --evo-mutation-sigma 0.10 --evo-exploration-delta 0.10 --evo-fitness-window 50 --evo-age-decay 0.995 --dna-global-capacity 128 --global-spawn-frac 0.15 --species-fracs 0.40 0.25 0.20 0.15 --species-profile 0 1.0 1.2 0.8 1.0 0.7 --species-profile 1 1.1 1.0 1.0 0.9 0.9 --species-profile 2 0.9 1.3 0.7 1.1 0.6 --species-profile 3 1.2 0.9 1.2 0.8 1.1 Turbo-Evolution_Run_gpu_1
+```
 
 **Was das ist:**
 Ein **selektiver Evolutionslauf**, bei dem DNA nicht mehr „nebenbei“, sondern gezielt entsteht.
@@ -313,7 +402,7 @@ Alle Effekte sind **mechanistisch erklärbar**.
 * Ablationstests (Pheromon / Mycel / DNA aus)
 * Mehrkanal-Pheromone (z. B. Nahrung vs. Gefahr)
 * Unterschiedliche Agentenrollen
-* GPU-Beschleunigung der Felddiffusion (OpenCL-Kernel)
+* GPU-Mycel-Update als zusaetzlicher Kernel
 
 ---
 
@@ -327,4 +416,3 @@ Stabil, deterministisch bei festem Seed, vollständig instrumentierbar.
 **Autor:**
 Ralf Krümmel
 Artificial Life / Emergent Systems / Low-Level Simulation
-

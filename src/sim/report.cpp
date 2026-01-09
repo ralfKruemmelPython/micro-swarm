@@ -54,7 +54,8 @@ bool parse_dump_filename(const std::string &filename, const std::string &prefix,
         return false;
     }
     std::string field_name = filename.substr(pos, filename.size() - pos - 4);
-    if (field_name != "resources" && field_name != "pheromone" && field_name != "molecules" && field_name != "mycel") {
+    if (field_name != "resources" && field_name != "phero_food" && field_name != "phero_danger" &&
+        field_name != "molecules" && field_name != "mycel") {
         return false;
     }
     step = step_val;
@@ -250,7 +251,7 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
         return false;
     }
 
-    const std::vector<std::string> fields = {"resources", "pheromone", "molecules", "mycel"};
+    const std::vector<std::string> fields = {"resources", "phero_food", "phero_danger", "molecules", "mycel"};
     std::map<int, SystemMetrics> system_by_step;
     for (const auto &m : opts.system_metrics) {
         system_by_step[m.step] = m;
@@ -356,7 +357,7 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
             error = "Metrics CSV konnte nicht geschrieben werden: " + metrics_path.string();
             return false;
         }
-        metrics << "step,field,min,max,mean,stddev,nonzero_ratio,p95,entropy,norm_entropy,dna_pool_size,avg_agent_energy\n";
+        metrics << "step,field,min,max,mean,stddev,nonzero_ratio,p95,entropy,norm_entropy,dna_pool_size,dna_global_size,dna_s0,dna_s1,dna_s2,dna_s3,avg_agent_energy,energy_s0,energy_s1,energy_s2,energy_s3\n";
         for (const auto &step : steps) {
             for (const auto &field : fields) {
                 const auto &stats = step.stats.at(field);
@@ -364,13 +365,18 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
                         << std::fixed << std::setprecision(6)
                         << stats.min << "," << stats.max << "," << stats.mean << "," << stats.stddev << ","
                         << stats.nonzero_ratio << "," << stats.p95 << "," << stats.entropy << "," << stats.norm_entropy
-                        << ",,\n";
+                        << ",,,,,,,,,,,\n";
             }
             auto it = system_by_step.find(step.step);
             if (it != system_by_step.end()) {
+                const auto &m = it->second;
                 metrics << step.step << ",__system__,"
                         << "0,0,0,0,0,0,0,0,"
-                        << it->second.dna_pool_size << "," << std::fixed << std::setprecision(6) << it->second.avg_agent_energy
+                        << m.dna_pool_size << ","
+                        << m.dna_global_size << ","
+                        << m.dna_species_sizes[0] << "," << m.dna_species_sizes[1] << "," << m.dna_species_sizes[2] << "," << m.dna_species_sizes[3] << ","
+                        << std::fixed << std::setprecision(6) << m.avg_agent_energy << ","
+                        << m.avg_energy_by_species[0] << "," << m.avg_energy_by_species[1] << "," << m.avg_energy_by_species[2] << "," << m.avg_energy_by_species[3]
                         << "\n";
             }
         }
@@ -449,6 +455,46 @@ bool generate_dump_report_html(const ReportOptions &opts, std::string &error) {
             out << "</tr>";
         }
         out << "</table>";
+
+        if (!system_by_step.empty()) {
+            out << "<h2>System over time</h2>";
+            out << "<table>";
+            out << "<tr><th>Metric</th><th>Sparkline</th></tr>";
+
+            auto collect_series = [&](auto getter) {
+                std::vector<float> series;
+                series.reserve(steps.size());
+                for (const auto &step : steps) {
+                    auto it = system_by_step.find(step.step);
+                    if (it != system_by_step.end()) {
+                        series.push_back(static_cast<float>(getter(it->second)));
+                    } else {
+                        series.push_back(0.0f);
+                    }
+                }
+                return series;
+            };
+
+            auto add_row = [&](const std::string &label, const std::vector<float> &series) {
+                float minv = 0.0f;
+                float maxv = 0.0f;
+                std::string s = sparkline(series, minv, maxv);
+                out << "<tr><td>" << label << "</td><td>" << s
+                    << " <span>(" << std::fixed << std::setprecision(4) << minv << " .. " << maxv << ")</span></td></tr>";
+            };
+
+            add_row("dna_global_size", collect_series([](const SystemMetrics &m) { return m.dna_global_size; }));
+            add_row("dna_s0", collect_series([](const SystemMetrics &m) { return m.dna_species_sizes[0]; }));
+            add_row("dna_s1", collect_series([](const SystemMetrics &m) { return m.dna_species_sizes[1]; }));
+            add_row("dna_s2", collect_series([](const SystemMetrics &m) { return m.dna_species_sizes[2]; }));
+            add_row("dna_s3", collect_series([](const SystemMetrics &m) { return m.dna_species_sizes[3]; }));
+            add_row("energy_s0", collect_series([](const SystemMetrics &m) { return m.avg_energy_by_species[0]; }));
+            add_row("energy_s1", collect_series([](const SystemMetrics &m) { return m.avg_energy_by_species[1]; }));
+            add_row("energy_s2", collect_series([](const SystemMetrics &m) { return m.avg_energy_by_species[2]; }));
+            add_row("energy_s3", collect_series([](const SystemMetrics &m) { return m.avg_energy_by_species[3]; }));
+
+            out << "</table>";
+        }
     }
 
     for (const auto &step : steps) {
