@@ -1050,4 +1050,10 @@ int ms_is_gpu_active(ms_handle_t *h) {
     return ctx->ocl_active ? 1 : 0;
 }
 
+void ms_get_api_version(int *major, int *minor, int *patch) {
+    if (major) *major = MS_API_VERSION_MAJOR;
+    if (minor) *minor = MS_API_VERSION_MINOR;
+    if (patch) *patch = MS_API_VERSION_PATCH;
+}
+
 } // extern "C"

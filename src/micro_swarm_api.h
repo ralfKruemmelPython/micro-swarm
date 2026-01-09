@@ -16,6 +16,10 @@
 extern "C" {
 #endif
 
+#define MS_API_VERSION_MAJOR 1
+#define MS_API_VERSION_MINOR 0
+#define MS_API_VERSION_PATCH 0
+
 typedef struct ms_handle_t ms_handle_t;
 
 typedef enum ms_field_kind {
@@ -176,6 +180,8 @@ MICRO_SWARM_API void ms_ocl_select_device(ms_handle_t *h, int platform, int devi
 MICRO_SWARM_API void ms_ocl_print_devices(void);
 MICRO_SWARM_API void ms_ocl_set_no_copyback(ms_handle_t *h, int enable);
 MICRO_SWARM_API int ms_is_gpu_active(ms_handle_t *h);
+
+MICRO_SWARM_API void ms_get_api_version(int *major, int *minor, int *patch);
 
 #ifdef __cplusplus
 }
