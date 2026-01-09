@@ -27,7 +27,8 @@ void Agent::step(Rng &rng,
                  GridField &phero_food,
                  GridField &phero_danger,
                  GridField &molecules,
-                 GridField &resources) {
+                 GridField &resources,
+                 const GridField &mycel) {
     last_energy = energy;
     const float sensor = params.agent_sense_radius * genome.sense_gain;
     const float turn = params.agent_random_turn * profile.exploration_mul;
@@ -44,9 +45,12 @@ void Agent::step(Rng &rng,
         float ny = y + std::sin(angles[i]) * sensor;
         float p_food = sample_field(phero_food, nx, ny) * genome.pheromone_gain * profile.food_attraction_mul;
         float p_danger = sample_field(phero_danger, nx, ny) * genome.pheromone_gain * profile.danger_aversion_mul;
-        float r = sample_field(resources, nx, ny);
-        float m = sample_field(molecules, nx, ny);
-        float w = p_food + r + 0.25f * m - p_danger;
+        float r = sample_field(resources, nx, ny) * profile.resource_weight_mul;
+        float m = sample_field(molecules, nx, ny) * profile.molecule_weight_mul;
+        float my = sample_field(mycel, nx, ny) * profile.mycel_attraction_mul;
+        float signal = p_food + p_danger + my;
+        float novelty = 1.0f - std::min(1.0f, std::max(0.0f, signal));
+        float w = p_food + r + 0.25f * m + my + profile.novelty_weight * novelty - p_danger;
         if (w < 0.001f) w = 0.001f;
         weights[i] = w;
     }
@@ -117,6 +121,20 @@ void Agent::step(Rng &rng,
         int dy = static_cast<int>(y);
         if (dx >= 0 && dy >= 0 && dx < phero_danger.width && dy < phero_danger.height) {
             phero_danger.at(dx, dy) += danger_deposit * profile.deposit_danger_mul;
+        }
+    }
+
+    if (profile.counter_deposit_mul > 0.0f) {
+        int dx = static_cast<int>(x);
+        int dy = static_cast<int>(y);
+        if (dx >= 0 && dy >= 0 && dx < phero_food.width && dy < phero_food.height) {
+            float local_food = phero_food.at(dx, dy);
+            float local_mycel = sample_field(mycel, static_cast<float>(dx), static_cast<float>(dy));
+            float density = local_food + local_mycel;
+            if (density > profile.over_density_threshold) {
+                float reduction = (density - profile.over_density_threshold) * profile.counter_deposit_mul;
+                phero_food.at(dx, dy) = std::max(0.0f, local_food - reduction);
+            }
         }
     }
 }

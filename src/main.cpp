@@ -73,12 +73,71 @@ struct CliOptions {
 };
 
 std::array<SpeciesProfile, 4> default_species_profiles() {
-    return {
-        SpeciesProfile{1.0f, 1.2f, 0.8f, 1.0f, 0.7f},
-        SpeciesProfile{1.1f, 1.0f, 1.0f, 0.9f, 0.9f},
-        SpeciesProfile{0.9f, 1.3f, 0.7f, 1.1f, 0.6f},
-        SpeciesProfile{1.2f, 0.9f, 1.2f, 0.8f, 1.1f}
-    };
+    std::array<SpeciesProfile, 4> profiles;
+
+    SpeciesProfile explorator;
+    explorator.exploration_mul = 1.4f;
+    explorator.food_attraction_mul = 0.6f;
+    explorator.danger_aversion_mul = 0.8f;
+    explorator.deposit_food_mul = 0.6f;
+    explorator.deposit_danger_mul = 0.5f;
+    explorator.resource_weight_mul = 1.4f;
+    explorator.molecule_weight_mul = 1.4f;
+    explorator.mycel_attraction_mul = 0.6f;
+    explorator.novelty_weight = 0.6f;
+    explorator.mutation_sigma_mul = 1.0f;
+    explorator.exploration_delta_mul = 1.0f;
+    explorator.dna_binding = 0.9f;
+
+    SpeciesProfile integrator;
+    integrator.exploration_mul = 0.7f;
+    integrator.food_attraction_mul = 1.4f;
+    integrator.danger_aversion_mul = 1.0f;
+    integrator.deposit_food_mul = 1.5f;
+    integrator.deposit_danger_mul = 0.8f;
+    integrator.resource_weight_mul = 0.9f;
+    integrator.molecule_weight_mul = 0.8f;
+    integrator.mycel_attraction_mul = 1.5f;
+    integrator.novelty_weight = 0.0f;
+    integrator.mutation_sigma_mul = 1.0f;
+    integrator.exploration_delta_mul = 1.0f;
+    integrator.dna_binding = 1.0f;
+
+    SpeciesProfile regulator;
+    regulator.exploration_mul = 0.9f;
+    regulator.food_attraction_mul = 0.8f;
+    regulator.danger_aversion_mul = 1.8f;
+    regulator.deposit_food_mul = 0.8f;
+    regulator.deposit_danger_mul = 1.4f;
+    regulator.resource_weight_mul = 0.9f;
+    regulator.molecule_weight_mul = 0.8f;
+    regulator.mycel_attraction_mul = 0.8f;
+    regulator.novelty_weight = 0.0f;
+    regulator.mutation_sigma_mul = 1.0f;
+    regulator.exploration_delta_mul = 1.0f;
+    regulator.dna_binding = 1.0f;
+    regulator.over_density_threshold = 0.6f;
+    regulator.counter_deposit_mul = 0.5f;
+
+    SpeciesProfile innovator;
+    innovator.exploration_mul = 1.3f;
+    innovator.food_attraction_mul = 0.7f;
+    innovator.danger_aversion_mul = 0.9f;
+    innovator.deposit_food_mul = 0.7f;
+    innovator.deposit_danger_mul = 0.7f;
+    innovator.resource_weight_mul = 1.1f;
+    innovator.molecule_weight_mul = 1.2f;
+    innovator.mycel_attraction_mul = 0.6f;
+    innovator.novelty_weight = 0.8f;
+    innovator.mutation_sigma_mul = 1.6f;
+    innovator.exploration_delta_mul = 1.6f;
+    innovator.dna_binding = 0.6f;
+
+    profiles[0] = explorator;
+    profiles[1] = integrator;
+    profiles[2] = regulator;
+    profiles[3] = innovator;
+    return profiles;
 }
 
 int pick_species(Rng &rng, const std::array<float, 4> &fracs) {
@@ -296,7 +355,11 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
                 std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
                 return false;
             }
-            opts.species_profiles[s] = SpeciesProfile{e, fa, da, df, dd};
+            opts.species_profiles[s].exploration_mul = e;
+            opts.species_profiles[s].food_attraction_mul = fa;
+            opts.species_profiles[s].danger_aversion_mul = da;
+            opts.species_profiles[s].deposit_food_mul = df;
+            opts.species_profiles[s].deposit_danger_mul = dd;
             i += 6;
             continue;
         }
@@ -659,11 +722,46 @@ int main(int argc, char **argv) {
     std::vector<Agent> agents;
     agents.reserve(params.agent_count);
 
-    auto sample_genome = [&](int species) -> Genome {
-        if (opts.evo_enable && !dna_global.entries.empty() && rng.uniform(0.0f, 1.0f) < opts.global_spawn_frac) {
-            return dna_global.sample(rng, params, evo);
+    auto random_genome = [&]() -> Genome {
+        Genome g;
+        g.sense_gain = rng.uniform(0.6f, 1.4f);
+        g.pheromone_gain = rng.uniform(0.6f, 1.4f);
+        g.exploration_bias = rng.uniform(0.2f, 0.8f);
+        return g;
+    };
+
+    auto apply_role_mutation = [&](Genome &g, const SpeciesProfile &profile) {
+        float sigma = evo.mutation_sigma * profile.mutation_sigma_mul;
+        float delta = evo.exploration_delta * profile.exploration_delta_mul;
+        if (sigma > 0.0f) {
+            g.sense_gain *= rng.uniform(1.0f - sigma, 1.0f + sigma);
+            g.pheromone_gain *= rng.uniform(1.0f - sigma, 1.0f + sigma);
         }
-        return dna_species[species].sample(rng, params, evo);
+        if (delta > 0.0f) {
+            g.exploration_bias += rng.uniform(-delta, delta);
+        }
+        g.sense_gain = std::min(3.0f, std::max(0.2f, g.sense_gain));
+        g.pheromone_gain = std::min(3.0f, std::max(0.2f, g.pheromone_gain));
+        g.exploration_bias = std::min(1.0f, std::max(0.0f, g.exploration_bias));
+    };
+
+    auto sample_genome = [&](int species) -> Genome {
+        const SpeciesProfile &profile = opts.species_profiles[species];
+        bool use_dna = rng.uniform(0.0f, 1.0f) < profile.dna_binding;
+        Genome g;
+        if (use_dna) {
+            if (opts.evo_enable && !dna_global.entries.empty() && rng.uniform(0.0f, 1.0f) < opts.global_spawn_frac) {
+                g = dna_global.sample(rng, params, evo);
+            } else {
+                g = dna_species[species].sample(rng, params, evo);
+            }
+        } else {
+            g = random_genome();
+        }
+        if (opts.evo_enable) {
+            apply_role_mutation(g, profile);
+        }
+        return g;
     };
 
     const float global_epsilon = 1e-6f;
@@ -848,7 +946,7 @@ int main(int argc, char **argv) {
         }
         for (auto &agent : agents) {
             const SpeciesProfile &profile = opts.species_profiles[agent.species];
-            agent.step(rng, params, opts.evo_enable ? opts.evo_fitness_window : 0, profile, phero_food, phero_danger, molecules, env.resources);
+            agent.step(rng, params, opts.evo_enable ? opts.evo_fitness_window : 0, profile, phero_food, phero_danger, molecules, env.resources, mycel.density);
             if (opts.evo_enable) {
                 if (agent.energy > opts.evo_min_energy_to_store) {
                     dna_species[agent.species].add(params, agent.genome, agent.fitness_value, evo, params.dna_capacity);

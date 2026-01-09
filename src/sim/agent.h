@@ -11,6 +11,15 @@ struct SpeciesProfile {
     float danger_aversion_mul = 1.0f;
     float deposit_food_mul = 1.0f;
     float deposit_danger_mul = 1.0f;
+    float resource_weight_mul = 1.0f;
+    float molecule_weight_mul = 1.0f;
+    float mycel_attraction_mul = 0.0f;
+    float novelty_weight = 0.0f;
+    float mutation_sigma_mul = 1.0f;
+    float exploration_delta_mul = 1.0f;
+    float dna_binding = 1.0f;
+    float over_density_threshold = 0.0f;
+    float counter_deposit_mul = 0.0f;
 };
 
 struct Agent {
@@ -32,5 +41,6 @@ struct Agent {
               GridField &phero_food,
               GridField &phero_danger,
               GridField &molecules,
-              GridField &resources);
+              GridField &resources,
+              const GridField &mycel);
 };
