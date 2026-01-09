@@ -10,3 +10,4 @@ struct GridData {
 };
 
 bool load_grid_csv(const std::string &path, GridData &out, std::string &error);
+bool save_grid_csv(const std::string &path, int width, int height, const std::vector<float> &values, std::string &error);

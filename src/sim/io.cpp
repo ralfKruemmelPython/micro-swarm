@@ -1,6 +1,7 @@
 #include "io.h"
 
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 namespace {
@@ -66,6 +67,36 @@ bool load_grid_csv(const std::string &path, GridData &out, std::string &error) {
     out.values.reserve(width * height);
     for (const auto &row : rows) {
         out.values.insert(out.values.end(), row.begin(), row.end());
+    }
+    return true;
+}
+
+bool save_grid_csv(const std::string &path, int width, int height, const std::vector<float> &values, std::string &error) {
+    if (width <= 0 || height <= 0) {
+        error = "Ungueltige Dimensionen fuer CSV-Dump";
+        return false;
+    }
+    if (static_cast<int>(values.size()) != width * height) {
+        error = "Ungueltige Werteanzahl fuer CSV-Dump";
+        return false;
+    }
+
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        error = "Datei konnte nicht geschrieben werden: " + path;
+        return false;
+    }
+
+    file << "# dump\n";
+    file << std::fixed << std::setprecision(3);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (x > 0) {
+                file << ",";
+            }
+            file << values[y * width + x];
+        }
+        file << "\n";
     }
     return true;
 }

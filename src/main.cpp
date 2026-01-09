@@ -1,4 +1,7 @@
+#include <filesystem>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -21,6 +24,9 @@ struct CliOptions {
     std::string resources_path;
     std::string pheromone_path;
     std::string molecules_path;
+    int dump_every = 0;
+    std::string dump_dir = "dumps";
+    std::string dump_prefix = "swarm";
 };
 
 void print_help() {
@@ -33,6 +39,15 @@ void print_help() {
               << "  --resources CSV  Startwerte Ressourcenfeld\n"
               << "  --pheromone CSV  Startwerte Pheromonfeld\n"
               << "  --molecules CSV  Startwerte Molekuelfeld\n"
+              << "  --mycel-growth F     Mycel-Wachstumsrate\n"
+              << "  --mycel-decay F      Mycel-Decay\n"
+              << "  --mycel-transport F  Mycel-Transport\n"
+              << "  --mycel-threshold F  Mycel-Drive-Schwelle\n"
+              << "  --mycel-drive-p F    Mycel-Drive-Gewicht Pheromon\n"
+              << "  --mycel-drive-r F    Mycel-Drive-Gewicht Ressourcen\n"
+              << "  --dump-every N   Dump-Intervall (0=aus)\n"
+              << "  --dump-dir PATH  Dump-Verzeichnis\n"
+              << "  --dump-prefix N  Dump-Dateiprefix\n"
               << "  --help           Hilfe anzeigen\n";
 }
 
@@ -54,6 +69,15 @@ bool parse_seed(const char *value, uint32_t &out) {
     }
 }
 
+bool parse_float(const char *value, float &out) {
+    try {
+        out = std::stof(value);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 bool parse_cli(int argc, char **argv, CliOptions &opts) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -67,23 +91,77 @@ bool parse_cli(int argc, char **argv, CliOptions &opts) {
         }
         const char *value = argv[++i];
         if (arg == "--width") {
-            if (!parse_int(value, opts.params.width)) return false;
+            if (!parse_int(value, opts.params.width)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
             opts.width_set = true;
         } else if (arg == "--height") {
-            if (!parse_int(value, opts.params.height)) return false;
+            if (!parse_int(value, opts.params.height)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
             opts.height_set = true;
         } else if (arg == "--agents") {
-            if (!parse_int(value, opts.params.agent_count)) return false;
+            if (!parse_int(value, opts.params.agent_count)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--steps") {
-            if (!parse_int(value, opts.params.steps)) return false;
+            if (!parse_int(value, opts.params.steps)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--seed") {
-            if (!parse_seed(value, opts.seed)) return false;
+            if (!parse_seed(value, opts.seed)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
         } else if (arg == "--resources") {
             opts.resources_path = value;
         } else if (arg == "--pheromone") {
             opts.pheromone_path = value;
         } else if (arg == "--molecules") {
             opts.molecules_path = value;
+        } else if (arg == "--mycel-growth") {
+            if (!parse_float(value, opts.params.mycel_growth)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--mycel-decay") {
+            if (!parse_float(value, opts.params.mycel_decay)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--mycel-transport") {
+            if (!parse_float(value, opts.params.mycel_transport)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--mycel-threshold") {
+            if (!parse_float(value, opts.params.mycel_drive_threshold)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--mycel-drive-p") {
+            if (!parse_float(value, opts.params.mycel_drive_p)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--mycel-drive-r") {
+            if (!parse_float(value, opts.params.mycel_drive_r)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--dump-every") {
+            if (!parse_int(value, opts.dump_every)) {
+                std::cerr << "Ungueltiger Wert fuer " << arg << "\n";
+                return false;
+            }
+        } else if (arg == "--dump-dir") {
+            opts.dump_dir = value;
+        } else if (arg == "--dump-prefix") {
+            opts.dump_prefix = value;
         } else {
             std::cerr << "Unbekanntes Argument: " << arg << "\n";
             return false;
@@ -166,7 +244,44 @@ int main(int argc, char **argv) {
     FieldParams pheromone_params{params.pheromone_evaporation, params.pheromone_diffusion};
     FieldParams molecule_params{params.molecule_evaporation, params.molecule_diffusion};
 
+    if (opts.dump_every > 0) {
+        std::error_code ec;
+        std::filesystem::create_directories(opts.dump_dir, ec);
+        if (ec) {
+            std::cerr << "Konnte Dump-Verzeichnis nicht erstellen: " << opts.dump_dir << "\n";
+            return 1;
+        }
+    }
+
+    auto dump_fields = [&](int step) -> bool {
+        if (opts.dump_every <= 0) return true;
+        if (step % opts.dump_every != 0) return true;
+
+        std::ostringstream name;
+        name << opts.dump_prefix << "_step" << std::setw(6) << std::setfill('0') << step;
+        std::string base = name.str();
+
+        std::string error;
+        auto dump_one = [&](const std::string &suffix, const GridField &field) -> bool {
+            std::filesystem::path path = std::filesystem::path(opts.dump_dir) / (base + suffix);
+            if (!save_grid_csv(path.string(), field.width, field.height, field.data, error)) {
+                std::cerr << error << "\n";
+                return false;
+            }
+            return true;
+        };
+
+        if (!dump_one("_resources.csv", env.resources)) return false;
+        if (!dump_one("_pheromone.csv", pheromone)) return false;
+        if (!dump_one("_molecules.csv", molecules)) return false;
+        if (!dump_one("_mycel.csv", mycel.density)) return false;
+        return true;
+    };
+
     for (int step = 0; step < params.steps; ++step) {
+        if (!dump_fields(step)) {
+            return 1;
+        }
         for (auto &agent : agents) {
             agent.step(rng, params, pheromone, molecules, env.resources);
             if (agent.energy > 1.2f) {

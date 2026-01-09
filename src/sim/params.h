@@ -19,6 +19,9 @@ struct SimParams {
     float mycel_decay = 0.003f;
     float mycel_growth = 0.02f;
     float mycel_transport = 0.12f;
+    float mycel_drive_threshold = 0.08f;
+    float mycel_drive_p = 0.6f;
+    float mycel_drive_r = 0.4f;
 
     float agent_move_cost = 0.01f;
     float agent_harvest = 0.04f;
